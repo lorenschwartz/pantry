@@ -12,7 +12,20 @@ import SwiftData
 struct pantryApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            PantryItem.self,
+            Category.self,
+            StorageLocation.self,
+            ShoppingListItem.self,
+            Receipt.self,
+            ReceiptItem.self,
+            BarcodeMapping.self,
+            Recipe.self,
+            RecipeIngredient.self,
+            RecipeInstruction.self,
+            RecipeCategory.self,
+            RecipeTag.self,
+            RecipeCookingNote.self,
+            RecipeCollection.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,7 +38,7 @@ struct pantryApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
         }
         .modelContainer(sharedModelContainer)
     }
