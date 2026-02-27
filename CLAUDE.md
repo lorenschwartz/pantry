@@ -235,10 +235,24 @@ Every list view must handle the empty state explicitly with a descriptive messag
 
 ## Testing
 
+This project follows **Test-Driven Development (TDD)**. Tests are written _before_ implementation, not after.
+
+### The TDD Cycle
+
+Follow Red-Green-Refactor strictly:
+
+1. **Red** — Write a failing test that defines the desired behavior. Confirm it fails for the right reason.
+2. **Green** — Write the minimum production code needed to make the test pass. Do not over-engineer.
+3. **Refactor** — Clean up both the production code and the test. Re-run tests to confirm they still pass.
+
+Never write production code that is not driven by a failing test.
+
 ### Test Structure
 
 - **`pantryTests/`** — Unit tests using Swift Testing (`import Testing`, `@Test` macro)
 - **`pantryUITests/`** — UI tests using XCTest
+
+Test files mirror the source tree. For every source file `pantry/Foo/Bar.swift`, the corresponding test file is `pantryTests/Foo/BarTests.swift`.
 
 ### Running Tests
 
@@ -248,11 +262,58 @@ Build and test via Xcode:
 
 > **Note:** There is currently no CI pipeline. Tests are run manually in Xcode.
 
-### Testability
+### FIRST Principles
 
-- `RecipePantryService` static methods are straightforward to unit test
-- Use in-memory `ModelContainer` for any tests touching SwiftData
-- Model computed properties (`isExpired`, `daysUntilExpiration`) are pure and easily unit tested
+Every test must be:
+
+| Principle | Meaning |
+|---|---|
+| **Fast** | Runs in milliseconds; no network, no real disk I/O |
+| **Isolated** | No shared mutable state; each `@Test` func sets up its own data |
+| **Repeatable** | Same result every run, regardless of order |
+| **Self-validating** | Uses `#expect` / `#require`; never relies on log inspection |
+| **Timely** | Written before the production code it covers |
+
+### What to Test
+
+| Target | Framework | Notes |
+|---|---|---|
+| Model computed properties (`isExpired`, `daysUntilExpiration`, `totalTime`) | Swift Testing | Pure functions — no container needed |
+| `RecipePantryService` static methods | Swift Testing | Pass an in-memory `ModelContext` for methods that persist |
+| `BarcodeMapping` auto-fill logic | Swift Testing | In-memory container; verify field population and skip logic |
+| Category / StorageLocation CRUD | Swift Testing | Insert, fetch, delete via in-memory `ModelContext` |
+
+### What Not to Test
+
+- SwiftUI view rendering or layout — use `#Preview` for visual verification
+- Apple framework internals (`@Query` reactivity, `ModelContext` persistence guarantees)
+- `UIViewRepresentable` wrappers for hardware sensors (e.g. `AVCaptureSession`) — mock the callback instead
+
+### Test Naming
+
+Use descriptive names that read as a sentence:
+
+```swift
+@Test func isExpired_returnsTrueWhenExpirationDateIsInThePast() { }
+@Test func generateShoppingList_excludesItemsAlreadyInPantry() { }
+@Test func autoFill_doesNotOverwriteFieldsThatAreAlreadyPopulated() { }
+```
+
+Prefer the pattern `subject_condition_expectedResult`.
+
+### SwiftData Test Setup
+
+Always use an in-memory container. Never use the default on-device store in tests.
+
+```swift
+func makeContainer() throws -> ModelContainer {
+    let schema = Schema([PantryItem.self, Category.self, /* ... */])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    return try ModelContainer(for: schema, configurations: config)
+}
+```
+
+Each `@Test` function should construct its own container so tests remain fully isolated.
 
 ---
 
@@ -264,12 +325,17 @@ Open `pantry.xcodeproj` in Xcode 15+ and build with `Cmd+B`. No package resoluti
 
 ### Adding a New Feature
 
-1. **Model first** — Define or extend `@Model` types in `Models/`
-2. **Update schema** — Add new model to the `Schema([...])` in `pantryApp.swift`
-3. **Service logic** — Add business logic as static functions in `RecipePantryService` (or a new service file)
-4. **Views** — Build SwiftUI views using `@Query` / `@Bindable`
-5. **Preview** — Add `#Preview` with an in-memory `ModelContainer`
-6. **Tests** — Add unit tests in `pantryTests/`
+Follow TDD order — tests before implementation:
+
+1. **Write a failing test** — In `pantryTests/`, write a `@Test` that specifies the behavior you want. Run it; confirm it fails (Red).
+2. **Model** — Define or extend `@Model` types in `Models/` to make the test compile.
+3. **Update schema** — Add new model to the `Schema([...])` in `pantryApp.swift`.
+4. **Service logic** — Implement the minimum static function in `RecipePantryService` (or a new service file) to make the test pass (Green).
+5. **Refactor** — Clean up production code and test; re-run to confirm Green.
+6. **Views** — Build SwiftUI views using `@Query` / `@Bindable` (view layer comes after logic is tested).
+7. **Preview** — Add `#Preview` with an in-memory `ModelContainer`.
+
+Never move to step 4 without a failing test in place.
 
 ### Git Workflow
 
@@ -290,6 +356,7 @@ There is also a helper script: `push_to_github.sh` for interactive deployment.
 
 ### Do
 
+- **Write the test first.** Every piece of business logic must have a failing test before production code is written.
 - **Use native Apple APIs only.** Do not introduce third-party Swift packages.
 - **Follow the service pattern.** Business logic belongs in `RecipePantryService` (or a new `*Service.swift`), not inside views.
 - **Mark computed properties on models**, not views, when logic depends solely on model data.
@@ -299,14 +366,19 @@ There is also a helper script: `push_to_github.sh` for interactive deployment.
 - **Update the schema array** when adding a new `@Model`.
 - **Use SF Symbols** for all icons — no custom image assets for UI icons.
 - **Support Dark Mode and Dynamic Type** — use semantic colors and `@ScaledMetric` where appropriate.
+- **Keep tests isolated** — each `@Test` builds its own in-memory `ModelContainer`; no shared state between tests.
+- **Name tests as specifications** — the test name should describe the behavior, not the implementation.
 
 ### Don't
 
+- Don't write production code without a failing test driving it.
 - Don't use `ObservableObject` / `@StateObject` / `@ObservedObject` — use `@Observable` macro or SwiftData bindings.
 - Don't bypass `ModelContext` for persistence — always use `.insert()`, `.delete()`, and `try modelContext.save()`.
 - Don't add CloudKit-specific code yet — the infrastructure exists but activation is a future phase.
 - Don't hardcode colors — use `Category.colorHex` parsing or semantic SwiftUI colors.
 - Don't create view-specific models/structs that duplicate SwiftData models.
+- Don't share `ModelContainer` instances across tests — state leakage causes non-repeatable failures.
+- Don't test Apple framework behavior (SwiftData reactivity, `@Query` updates) — only test your own logic.
 
 ---
 
