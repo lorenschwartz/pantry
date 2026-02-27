@@ -41,6 +41,12 @@ struct MainTabView: View {
                     Label("Insights", systemImage: "chart.bar")
                 }
                 .tag(4)
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(5)
         }
     }
 }

@@ -34,7 +34,8 @@ struct AddEditItemView: View {
     
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedImageData: Data?
-    
+    @State private var showingBarcodeScanner = false
+
     let commonUnits = ["item", "lb", "oz", "kg", "g", "L", "mL", "cup", "tbsp", "tsp", "gallon", "bottle", "can", "bag", "box", "bunch", "loaf", "package"]
     
     var isEditing: Bool {
@@ -176,9 +177,20 @@ struct AddEditItemView: View {
                 
                 // Additional Info
                 Section("Additional Information") {
-                    TextField("Barcode (optional)", text: $barcode)
-                        .keyboardType(.numberPad)
-                    
+                    HStack {
+                        TextField("Barcode (optional)", text: $barcode)
+                            .keyboardType(.numberPad)
+                        Spacer()
+                        Button {
+                            showingBarcodeScanner = true
+                        } label: {
+                            Image(systemName: "barcode.viewfinder")
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
@@ -199,9 +211,35 @@ struct AddEditItemView: View {
                     .disabled(name.isEmpty)
                 }
             }
+            .sheet(isPresented: $showingBarcodeScanner) {
+                BarcodeScannerView { scannedBarcode in
+                    barcode = scannedBarcode
+                    autoFillFromBarcode(scannedBarcode)
+                }
+            }
         }
     }
-    
+
+    // MARK: - Barcode Auto-Fill
+
+    private func autoFillFromBarcode(_ scannedBarcode: String) {
+        let descriptor = FetchDescriptor<BarcodeMapping>(
+            predicate: #Predicate { $0.barcode == scannedBarcode }
+        )
+        guard let mapping = try? modelContext.fetch(descriptor).first else { return }
+
+        // Only auto-fill fields the user hasn't already touched
+        if name.isEmpty { name = mapping.productName }
+        if brand.isEmpty, let mappedBrand = mapping.brand { brand = mappedBrand }
+        if unit == "item", mapping.defaultUnit != "item" { unit = mapping.defaultUnit }
+        if selectedCategory == nil { selectedCategory = mapping.category }
+        if price.isEmpty, let avg = mapping.averagePrice {
+            price = String(format: "%.2f", avg)
+        }
+
+        mapping.recordScan()
+    }
+
     // MARK: - Actions
     
     private func saveItem() {
