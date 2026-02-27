@@ -217,6 +217,14 @@ struct AddEditItemView: View {
                     autoFillFromBarcode(scannedBarcode)
                 }
             }
+            .onChange(of: selectedCategory) { _, newCategory in
+                guard !hasExpirationDate,
+                      let category = newCategory,
+                      let days = RecipePantryService.estimatedShelfLifeDays(for: category)
+                else { return }
+                hasExpirationDate = true
+                expirationDate = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? expirationDate
+            }
         }
     }
 

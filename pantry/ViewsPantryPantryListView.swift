@@ -20,6 +20,7 @@ struct PantryListView: View {
     @State private var sortOrder: SortOrder = .name
     @State private var showingAddItem = false
     @State private var showingFilters = false
+    @State private var editingItem: PantryItem?
     
     enum SortOrder: String, CaseIterable {
         case name = "Name"
@@ -123,7 +124,7 @@ struct PantryListView: View {
                                 }
                                 
                                 Button {
-                                    // Quick edit action
+                                    editingItem = item
                                 } label: {
                                     Label("Edit", systemImage: "pencil")
                                 }
@@ -198,6 +199,9 @@ struct PantryListView: View {
             }
             .sheet(isPresented: $showingAddItem) {
                 AddEditItemView()
+            }
+            .sheet(item: $editingItem) { item in
+                AddEditItemView(item: item)
             }
             .onAppear {
                 initializeDefaultData()

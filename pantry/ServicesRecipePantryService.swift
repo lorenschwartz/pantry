@@ -252,8 +252,29 @@ class RecipePantryService {
         return quantity
     }
     
+    // MARK: - Expiration Estimation
+
+    /// Returns a typical shelf-life in days for well-known default categories.
+    /// Returns `nil` for custom categories that have no known mapping.
+    static func estimatedShelfLifeDays(for category: Category) -> Int? {
+        let lookup: [String: Int] = [
+            "produce":    7,
+            "dairy":      14,
+            "proteins":   3,
+            "grains":     365,
+            "spices":     1095,
+            "condiments": 365,
+            "beverages":  365,
+            "snacks":     90,
+            "frozen":     180,
+            "canned":     730,
+            "baking":     365
+        ]
+        return lookup[category.name.lowercased()]
+    }
+
     // MARK: - Ingredient Substitution
-    
+
     /// Common ingredient substitutions
     static let commonSubstitutions: [String: [String]] = [
         "butter": ["margarine", "oil", "coconut oil"],
