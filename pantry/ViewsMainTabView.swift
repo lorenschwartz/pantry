@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct MainTabView: View {
     @State private var selectedTab = 0
-    
+    @Query private var pantryItems: [PantryItem]
+
     var body: some View {
         TabView(selection: $selectedTab) {
             PantryListView()
@@ -47,6 +49,17 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gear")
                 }
                 .tag(5)
+        }
+        .onAppear { scheduleNotifications() }
+        .onChange(of: pantryItems) { _, _ in scheduleNotifications() }
+    }
+
+    private func scheduleNotifications() {
+        NotificationService.requestPermission()
+        NotificationService.scheduleExpirationNotifications(for: pantryItems)
+        let lowStock = LowStockService.detectLowStockItems(from: pantryItems)
+        if !lowStock.isEmpty {
+            NotificationService.scheduleLowStockNotification(for: lowStock)
         }
     }
 }

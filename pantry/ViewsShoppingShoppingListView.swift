@@ -10,12 +10,14 @@ import SwiftData
 
 struct ShoppingListView: View {
     @Environment(\.modelContext) private var modelContext
-    
+
     @Query(sort: \ShoppingListItem.priority, order: .reverse) private var allItems: [ShoppingListItem]
+    @Query private var pantryItems: [PantryItem]
     @Query private var categories: [Category]
-    
+
     @State private var showAddItem = false
     @State private var showCheckedItems = false
+    @State private var autoFillMessage: String?
     
     private var uncheckedItems: [ShoppingListItem] {
         allItems.filter { !$0.isChecked }
@@ -120,6 +122,23 @@ struct ShoppingListView: View {
                 }
             }
             .navigationTitle("Shopping List")
+            .overlay(alignment: .bottom) {
+                if let message = autoFillMessage {
+                    Text(message)
+                        .font(.subheadline)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                withAnimation { autoFillMessage = nil }
+                            }
+                        }
+                }
+            }
+            .animation(.easeInOut, value: autoFillMessage)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -129,31 +148,39 @@ struct ShoppingListView: View {
                     }
                 }
                 
-                if !allItems.isEmpty {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Menu {
-                            Button {
-                                sortByCategory()
-                            } label: {
-                                Label("Sort by Category", systemImage: "square.grid.2x2")
-                            }
-                            
-                            Button {
-                                sortByPriority()
-                            } label: {
-                                Label("Sort by Priority", systemImage: "arrow.up.arrow.down")
-                            }
-                            
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            autoFillLowStock()
+                        } label: {
+                            Label("Auto-Fill Low Stock", systemImage: "arrow.down.circle")
+                        }
+
+                        Divider()
+
+                        Button {
+                            sortByCategory()
+                        } label: {
+                            Label("Sort by Category", systemImage: "square.grid.2x2")
+                        }
+
+                        Button {
+                            sortByPriority()
+                        } label: {
+                            Label("Sort by Priority", systemImage: "arrow.up.arrow.down")
+                        }
+
+                        if !allItems.isEmpty {
                             Divider()
-                            
+
                             Button(role: .destructive) {
                                 clearAll()
                             } label: {
                                 Label("Clear All", systemImage: "trash")
                             }
-                        } label: {
-                            Label("Options", systemImage: "ellipsis.circle")
                         }
+                    } label: {
+                        Label("Options", systemImage: "ellipsis.circle")
                     }
                 }
             }
@@ -189,10 +216,21 @@ struct ShoppingListView: View {
         }
     }
     
+    private func autoFillLowStock() {
+        let lowStock = LowStockService.detectLowStockItems(from: pantryItems)
+        let added = LowStockService.addToShoppingList(
+            lowStock, existingList: allItems, context: modelContext)
+        if added.isEmpty {
+            autoFillMessage = "No new low-stock items to add."
+        } else {
+            autoFillMessage = "Added \(added.count) low-stock item\(added.count == 1 ? "" : "s")."
+        }
+    }
+
     private func sortByCategory() {
         // Categories are already sorted in the query
     }
-    
+
     private func sortByPriority() {
         // Already sorted by priority
     }
