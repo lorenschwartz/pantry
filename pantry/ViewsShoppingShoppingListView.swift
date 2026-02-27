@@ -314,9 +314,11 @@ struct ShoppingListItemRow: View {
 struct AddShoppingListItemView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    
+
     @Query private var categories: [Category]
-    
+    @Query private var pantryItems: [PantryItem]
+    @Query(sort: \ShoppingListItem.addedDate, order: .reverse) private var shoppingHistory: [ShoppingListItem]
+
     @State private var name = ""
     @State private var quantity: Double = 1.0
     @State private var unit = "item"
@@ -324,15 +326,104 @@ struct AddShoppingListItemView: View {
     @State private var estimatedPrice = ""
     @State private var priority = 1
     @State private var selectedCategory: Category?
-    
-    let commonUnits = ["item", "lb", "oz", "kg", "g", "L", "mL", "cup", "tbsp", "tsp", "gallon", "bottle", "can", "bag", "box", "bunch", "loaf", "package"]
-    
+    @State private var suggestions: [ShoppingSuggestion] = []
+
+    private var recentItems: [ShoppingSuggestion] {
+        ShoppingItemSuggestionService.recentItems(from: shoppingHistory)
+    }
+
+    let commonUnits = ["item", "lb", "oz", "kg", "g", "L", "mL", "cup", "tbsp", "tsp",
+                       "gallon", "bottle", "can", "bag", "box", "bunch", "loaf", "package"]
+
     var body: some View {
         NavigationStack {
             Form {
+                // Recent quick-add chips — visible only when name field is empty
+                if name.isEmpty && !recentItems.isEmpty {
+                    Section("Recent") {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(recentItems) { suggestion in
+                                    Button {
+                                        applySuggestion(suggestion)
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            if let cat = suggestion.category {
+                                                Image(systemName: cat.iconName)
+                                                    .foregroundStyle(cat.color)
+                                                    .font(.caption)
+                                            }
+                                            Text(suggestion.name)
+                                                .font(.subheadline)
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                        .listRowBackground(Color.clear)
+                    }
+                }
+
                 Section("Item Details") {
                     TextField("Item Name", text: $name)
-                    
+                        .onChange(of: name) { _, newValue in
+                            suggestions = ShoppingItemSuggestionService.suggestions(
+                                for: newValue,
+                                pantryItems: pantryItems,
+                                shoppingHistory: shoppingHistory
+                            )
+                        }
+
+                    // Inline suggestions — appear as tappable rows under the name field
+                    if !suggestions.isEmpty {
+                        ForEach(suggestions) { suggestion in
+                            Button {
+                                applySuggestion(suggestion)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    if let cat = suggestion.category {
+                                        Image(systemName: cat.iconName)
+                                            .foregroundStyle(cat.color)
+                                            .frame(width: 22)
+                                    } else {
+                                        Image(systemName: suggestion.source == .pantry
+                                              ? "cabinet" : "clock.arrow.circlepath")
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 22)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(suggestion.name)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.primary)
+                                        Text("\(suggestion.quantity.formatted()) \(suggestion.unit)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    if let price = suggestion.estimatedPrice {
+                                        Text("$\(price, specifier: "%.2f")")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Image(systemName: "arrow.up.left")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     HStack {
                         Text("Quantity")
                         Spacer()
@@ -341,13 +432,13 @@ struct AddShoppingListItemView: View {
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
                     }
-                    
+
                     Picker("Unit", selection: $unit) {
-                        ForEach(commonUnits, id: \.self) { unit in
-                            Text(unit).tag(unit)
+                        ForEach(commonUnits, id: \.self) { u in
+                            Text(u).tag(u)
                         }
                     }
-                    
+
                     HStack {
                         Text("Estimated Price")
                         Spacer()
@@ -359,7 +450,7 @@ struct AddShoppingListItemView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 Section("Organization") {
                     Picker("Priority", selection: $priority) {
                         Text("Low").tag(0)
@@ -367,7 +458,7 @@ struct AddShoppingListItemView: View {
                         Text("High").tag(2)
                     }
                     .pickerStyle(.segmented)
-                    
+
                     Picker("Category", selection: $selectedCategory) {
                         Text("None").tag(nil as Category?)
                         ForEach(categories) { category in
@@ -378,7 +469,7 @@ struct AddShoppingListItemView: View {
                             .tag(category as Category?)
                         }
                     }
-                    
+
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(2...4)
                 }
@@ -387,24 +478,36 @@ struct AddShoppingListItemView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
-                
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        saveItem()
-                    }
-                    .disabled(name.isEmpty)
+                    Button("Add") { saveItem() }
+                        .disabled(name.isEmpty)
                 }
             }
         }
     }
-    
+
+    // MARK: - Suggestion helpers
+
+    private func applySuggestion(_ suggestion: ShoppingSuggestion) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            name = suggestion.name
+            quantity = suggestion.quantity
+            unit = suggestion.unit
+            selectedCategory = suggestion.category
+            if let price = suggestion.estimatedPrice {
+                estimatedPrice = String(format: "%.2f", price)
+            }
+            suggestions = []
+        }
+    }
+
+    // MARK: - Save
+
     private func saveItem() {
         let priceValue = Double(estimatedPrice.trimmingCharacters(in: .whitespacesAndNewlines))
-        
+
         let item = ShoppingListItem(
             name: name,
             quantity: quantity,
@@ -414,7 +517,7 @@ struct AddShoppingListItemView: View {
             priority: priority,
             category: selectedCategory
         )
-        
+
         modelContext.insert(item)
         dismiss()
     }
