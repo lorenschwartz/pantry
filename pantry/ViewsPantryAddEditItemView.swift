@@ -231,19 +231,22 @@ struct AddEditItemView: View {
     // MARK: - Barcode Auto-Fill
 
     private func autoFillFromBarcode(_ scannedBarcode: String) {
-        let descriptor = FetchDescriptor<BarcodeMapping>(
-            predicate: #Predicate { $0.barcode == scannedBarcode }
-        )
-        guard let mapping = try? modelContext.fetch(descriptor).first else { return }
+        guard let mapping = BarcodeService.lookupMapping(for: scannedBarcode, context: modelContext)
+        else { return }
 
-        // Only auto-fill fields the user hasn't already touched
-        if name.isEmpty { name = mapping.productName }
-        if brand.isEmpty, let mappedBrand = mapping.brand { brand = mappedBrand }
-        if unit == "item", mapping.defaultUnit != "item" { unit = mapping.defaultUnit }
-        if selectedCategory == nil { selectedCategory = mapping.category }
-        if price.isEmpty, let avg = mapping.averagePrice {
-            price = String(format: "%.2f", avg)
-        }
+        let filled = BarcodeService.autoFillFields(
+            from: mapping,
+            currentName: name,
+            currentBrand: brand,
+            currentUnit: unit,
+            currentCategory: selectedCategory,
+            currentPrice: price
+        )
+        name = filled.name
+        brand = filled.brand
+        unit = filled.unit
+        selectedCategory = filled.category
+        price = filled.price
 
         mapping.recordScan()
     }
@@ -291,33 +294,19 @@ struct AddEditItemView: View {
             
             // Learn barcode if provided
             if !barcode.isEmpty {
-                learnBarcode(barcode: barcode, item: newItem)
+                BarcodeService.learnBarcode(
+                    barcode,
+                    productName: newItem.name,
+                    brand: newItem.brand,
+                    unit: newItem.unit,
+                    category: newItem.category,
+                    price: newItem.price,
+                    context: modelContext
+                )
             }
         }
-        
+
         dismiss()
-    }
-    
-    private func learnBarcode(barcode: String, item: PantryItem) {
-        // Check if barcode already exists
-        let descriptor = FetchDescriptor<BarcodeMapping>(
-            predicate: #Predicate { $0.barcode == barcode }
-        )
-        
-        if let existing = try? modelContext.fetch(descriptor).first {
-            existing.recordScan()
-        } else {
-            // Create new barcode mapping
-            let mapping = BarcodeMapping(
-                barcode: barcode,
-                productName: item.name,
-                brand: item.brand,
-                defaultUnit: item.unit,
-                category: item.category,
-                averagePrice: item.price
-            )
-            modelContext.insert(mapping)
-        }
     }
 }
 
