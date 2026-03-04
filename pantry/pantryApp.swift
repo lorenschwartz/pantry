@@ -27,7 +27,11 @@ struct PantryApp: App {
             RecipeCookingNote.self,
             RecipeCollection.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        // Use an in-memory store when the app is launched by the UI-test runner.
+        // This guarantees a clean, isolated data set for every test run and prevents
+        // test data from polluting the on-device store (or vice-versa).
+        let isUITesting = CommandLine.arguments.contains("-UITesting")
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: isUITesting)
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
