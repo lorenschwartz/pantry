@@ -16,9 +16,16 @@ struct ShoppingListView: View {
 
     @State private var showAddItem = false
     @State private var showCheckedItems = false
-    @State private var sortBy: SortOption = .priority
+    /// Persisted across sessions; defaults to aisle grouping.
+    @AppStorage("shoppingListSortBy") private var sortByRaw: String = SortOption.aisle.rawValue
 
-    enum SortOption {
+    private var sortBy: SortOption { SortOption(rawValue: sortByRaw) ?? .aisle }
+
+    private var sortByBinding: Binding<SortOption> {
+        Binding(get: { sortBy }, set: { sortByRaw = $0.rawValue })
+    }
+
+    enum SortOption: String {
         case priority, aisle
     }
 
@@ -48,8 +55,13 @@ struct ShoppingListView: View {
 
         var result: [(aisleName: String, items: [ShoppingListItem], category: Category?)] = []
 
-        // Known categories in sort order (from @Query)
+        // Known categories in sort order (from @Query).
+        // Deduplicate by name — if the store contains duplicate Category rows with the
+        // same name (e.g. from a seeding race condition), we must only emit one section.
+        var seenNames = Set<String>()
         for category in categories {
+            guard !seenNames.contains(category.name) else { continue }
+            seenNames.insert(category.name)
             if let items = grouped[category.name], !items.isEmpty {
                 result.append((category.name, items, category))
             }
@@ -182,6 +194,7 @@ struct ShoppingListView: View {
                             }
                         }
                     }
+                    .frame(maxHeight: .infinity)
                 }
             }
             .navigationTitle("Shopping List")
@@ -197,7 +210,7 @@ struct ShoppingListView: View {
                 if !allItems.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
                         Menu {
-                            Picker("View Mode", selection: $sortBy) {
+                            Picker("View Mode", selection: sortByBinding) {
                                 Label("Group by Aisle", systemImage: "cart.badge.questionmark")
                                     .tag(SortOption.aisle)
                                 Label("Sort by Priority", systemImage: "arrow.up.arrow.down")

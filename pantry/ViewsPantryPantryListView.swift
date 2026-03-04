@@ -148,6 +148,7 @@ struct PantryListView: View {
                             }
                         }
                     }
+                    .frame(maxHeight: .infinity)
                     .listStyle(.plain)
                     .searchable(text: $searchText, prompt: "Search items")
                 }
@@ -248,20 +249,22 @@ struct PantryListView: View {
     }
     
     private func initializeDefaultData() {
-        // Add default categories if none exist
-        if categories.isEmpty {
+        // Query the store directly rather than using the @Query property, which can be
+        // stale at onAppear time and cause duplicate inserts on repeated appearances.
+        let categoryCount = (try? modelContext.fetchCount(FetchDescriptor<Category>())) ?? 0
+        if categoryCount == 0 {
             for category in Category.defaultCategories {
                 modelContext.insert(category)
             }
         }
-        
-        // Add default locations if none exist
-        if locations.isEmpty {
+
+        let locationCount = (try? modelContext.fetchCount(FetchDescriptor<StorageLocation>())) ?? 0
+        if locationCount == 0 {
             for location in StorageLocation.defaultLocations {
                 modelContext.insert(location)
             }
         }
-        
+
         try? modelContext.save()
     }
 }
