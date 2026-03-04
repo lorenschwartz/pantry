@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build & Test (Unit + UI)
+    runs-on: macos-15        # Xcode 16.2 + iOS 18 simulators
+
+    steps:
+      # ── 1. Source ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Xcode ──────────────────────────────────────────────────────────
+      # macos-15 ships with Xcode 16.2 as the default; pin it explicitly
+      # so the build doesn't silently change when the runner image updates.
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Xcode & Swift versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # ── 3. Simulator ───────────────────────────────────────────────────────
+      # Find the UDID of an available iPhone 16 (iOS 18) simulator, create it
+      # if it doesn't exist, and boot it.  The UDID is written to $GITHUB_ENV
+      # so subsequent steps can reference it via $SIMULATOR_UDID.
+      - name: Boot iOS Simulator
+        run: |
+          set -euo pipefail
+
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+runtimes = sorted(data['devices'].keys(), reverse=True)
+for rt in runtimes:
+    if 'iOS' not in rt:
+        continue
+    for d in data['devices'][rt]:
+        if d.get('isAvailable') and 'iPhone 16' in d.get('name', ''):
+            print(d['udid']); exit()
+# Fallback: any available iPhone
+for rt in runtimes:
+    if 'iOS' not in rt:
+        continue
+    for d in data['devices'][rt]:
+        if d.get('isAvailable') and 'iPhone' in d.get('name', ''):
+            print(d['udid']); exit()
+" 2>/dev/null || echo "")
+
+          if [ -z "$UDID" ]; then
+            echo "Creating a new iPhone 16 simulator…"
+            RUNTIME=$(xcrun simctl list runtimes available --json \
+              | python3 -c "
+import sys, json
+rts = json.load(sys.stdin)['runtimes']
+ios = [r for r in rts if 'iOS' in r.get('name','') and r.get('isAvailable')]
+ios.sort(key=lambda r: r.get('version',''), reverse=True)
+print(ios[0]['identifier'] if ios else '')
+")
+            UDID=$(xcrun simctl create "iPhone 16" "iPhone 16" "$RUNTIME")
+            echo "Created simulator $UDID"
+          fi
+
+          echo "Booting $UDID…"
+          xcrun simctl boot "$UDID" 2>/dev/null || true   # already-booted is OK
+
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "✅ Simulator ready: $UDID"
+
+      # ── 4. Tests ───────────────────────────────────────────────────────────
+      - name: Run unit + UI tests
+        run: ./scripts/run_tests.sh "$SIMULATOR_UDID"
+
+      # ── 5. Upload results ─────────────────────────────────────────────────
+      # Always upload the .xcresult bundle so failures can be inspected even
+      # when the step itself is marked as failed.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults-${{ github.run_number }}
+          path: TestResults.xcresult
+          retention-days: 14
