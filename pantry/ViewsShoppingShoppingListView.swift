@@ -75,46 +75,47 @@ struct ShoppingListView: View {
         return result
     }
 
+    // MARK: - Summary Bar
+
+    private var summaryBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(uncheckedItems.count) item\(uncheckedItems.count == 1 ? "" : "s") to buy")
+                    .font(.headline)
+                if estimatedTotal > 0 {
+                    Text("Estimated: $\(estimatedTotal, specifier: "%.2f")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            if !checkedItems.isEmpty {
+                Button {
+                    withAnimation {
+                        showCheckedItems.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("\(checkedItems.count) checked")
+                            .font(.caption)
+                        Image(systemName: showCheckedItems ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+    }
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Summary Bar
-                if !uncheckedItems.isEmpty {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(uncheckedItems.count) item\(uncheckedItems.count == 1 ? "" : "s") to buy")
-                                .font(.headline)
-                            if estimatedTotal > 0 {
-                                Text("Estimated: $\(estimatedTotal, specifier: "%.2f")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Spacer()
-
-                        if !checkedItems.isEmpty {
-                            Button {
-                                withAnimation {
-                                    showCheckedItems.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text("\(checkedItems.count) checked")
-                                        .font(.caption)
-                                    Image(systemName: showCheckedItems ? "chevron.up" : "chevron.down")
-                                        .font(.caption2)
-                                }
-                                .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                }
-
+            Group {
                 // Shopping List
                 if uncheckedItems.isEmpty && checkedItems.isEmpty {
                     ContentUnavailableView {
@@ -194,7 +195,13 @@ struct ShoppingListView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: .infinity)
+                }
+            }
+            // Pin the summary bar above the scrollable content without wrapping
+            // the List in a VStack (which breaks scroll gesture routing in iOS 26).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !uncheckedItems.isEmpty {
+                    summaryBar
                 }
             }
             .navigationTitle("Shopping List")

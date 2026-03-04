@@ -75,34 +75,37 @@ struct PantryListView: View {
         filteredItems.compactMap { $0.price }.reduce(0, +)
     }
     
+    // MARK: - Summary Bar
+
+    private var summaryBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(inventorySummary)
+                    .font(.headline)
+                if totalValue > 0 {
+                    Text("Total Value: $\(totalValue, specifier: "%.2f")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+
+            // Filter indicators
+            if selectedCategory != nil || selectedLocation != nil {
+                Button(action: clearFilters) {
+                    Label("Clear Filters", systemImage: "xmark.circle.fill")
+                        .font(.caption)
+                        .labelStyle(.iconOnly)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Summary bar
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(inventorySummary)
-                            .font(.headline)
-                        if totalValue > 0 {
-                            Text("Total Value: $\(totalValue, specifier: "%.2f")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    
-                    // Filter indicators
-                    if selectedCategory != nil || selectedLocation != nil {
-                        Button(action: clearFilters) {
-                            Label("Clear Filters", systemImage: "xmark.circle.fill")
-                                .font(.caption)
-                                .labelStyle(.iconOnly)
-                        }
-                    }
-                }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                
+            Group {
                 // Item list
                 if filteredItems.isEmpty {
                     ContentUnavailableView(
@@ -148,10 +151,14 @@ struct PantryListView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: .infinity)
                     .listStyle(.plain)
                     .searchable(text: $searchText, prompt: "Search items")
                 }
+            }
+            // Pin the summary bar above the scrollable content without wrapping
+            // the List in a VStack (which breaks scroll gesture routing in iOS 26).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                summaryBar
             }
             .navigationTitle("Pantry")
             .toolbar {
