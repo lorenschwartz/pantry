@@ -28,7 +28,7 @@ struct RecipeSuggestionsView: View {
         pantryItems.filter { $0.isExpiringSoon || $0.isExpired }
     }
     
-    private var recipeSuggestions: [(recipe: Recipe, matchPercentage: Double, missing: [RecipeIngredient])] {
+    private var recipeSuggestions: [(recipe: Recipe, matchPercentage: Double, missingIngredients: [RecipeIngredient])] {
         let results = RecipePantryService.makeableRecipes(
             recipes: recipes,
             pantryItems: pantryItems
@@ -45,7 +45,7 @@ struct RecipeSuggestionsView: View {
         case .matchPercentage:
             filtered.sort { $0.matchPercentage > $1.matchPercentage }
         case .difficulty:
-            filtered.sort { $0.recipe.difficulty.rawValue < $1.recipe.difficulty.rawValue }
+            filtered.sort { $0.recipe.difficulty.sortOrder < $1.recipe.difficulty.sortOrder }
         case .totalTime:
             filtered.sort { $0.recipe.totalTime < $1.recipe.totalTime }
         case .rating:
@@ -55,7 +55,7 @@ struct RecipeSuggestionsView: View {
         return filtered
     }
     
-    private var expiringRecipeSuggestions: [(recipe: Recipe, expiringItems: [PantryItem])] {
+    private var expiringRecipeSuggestions: [(recipe: Recipe, expiringIngredientsUsed: [PantryItem])] {
         RecipePantryService.suggestRecipesForExpiringItems(
             recipes: recipes,
             expiringItems: expiringItems
@@ -72,7 +72,7 @@ struct RecipeSuggestionsView: View {
                             NavigationLink(destination: RecipeDetailView(recipe: suggestion.recipe)) {
                                 ExpiringRecipeSuggestionRow(
                                     recipe: suggestion.recipe,
-                                    expiringItems: suggestion.expiringItems
+                                    expiringItems: suggestion.expiringIngredientsUsed
                                 )
                             }
                         }
@@ -99,7 +99,7 @@ struct RecipeSuggestionsView: View {
                                 RecipeSuggestionRow(
                                     recipe: suggestion.recipe,
                                     matchPercentage: suggestion.matchPercentage,
-                                    missingCount: suggestion.missing.count
+                                    missingCount: suggestion.missingIngredients.count
                                 )
                             }
                         }

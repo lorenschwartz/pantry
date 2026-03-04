@@ -291,8 +291,13 @@ struct AddEditRecipeView: View {
             recipe.imageData = selectedImageData
             recipe.modifiedDate = Date()
             
-            // Clear and rebuild ingredients
-            recipe.ingredients?.removeAll()
+            // Delete old ingredients from model context to avoid orphans
+            if let oldIngredients = recipe.ingredients {
+                for old in oldIngredients {
+                    modelContext.delete(old)
+                }
+            }
+            recipe.ingredients = []
             for (index, ing) in ingredients.enumerated() {
                 let ingredient = RecipeIngredient(
                     name: ing.name,
@@ -305,9 +310,14 @@ struct AddEditRecipeView: View {
                 modelContext.insert(ingredient)
                 recipe.ingredients?.append(ingredient)
             }
-            
-            // Clear and rebuild instructions
-            recipe.instructions?.removeAll()
+
+            // Delete old instructions from model context to avoid orphans
+            if let oldInstructions = recipe.instructions {
+                for old in oldInstructions {
+                    modelContext.delete(old)
+                }
+            }
+            recipe.instructions = []
             for (index, inst) in instructions.enumerated() {
                 let instruction = RecipeInstruction(
                     stepNumber: index + 1,
@@ -333,7 +343,11 @@ struct AddEditRecipeView: View {
             )
             
             modelContext.insert(newRecipe)
-            
+
+            // Initialize relationship arrays before appending
+            newRecipe.ingredients = []
+            newRecipe.instructions = []
+
             // Add ingredients
             for (index, ing) in ingredients.enumerated() {
                 let ingredient = RecipeIngredient(

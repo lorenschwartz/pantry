@@ -235,6 +235,10 @@ struct RecipesListView: View {
         
         modelContext.insert(newRecipe)
         
+        // Initialize relationship arrays before appending
+        newRecipe.ingredients = []
+        newRecipe.instructions = []
+
         // Duplicate ingredients
         if let ingredients = recipe.ingredients {
             for ingredient in ingredients {
@@ -246,11 +250,11 @@ struct RecipesListView: View {
                     isOptional: ingredient.isOptional,
                     sortOrder: ingredient.sortOrder
                 )
-                newRecipe.ingredients?.append(newIngredient)
                 modelContext.insert(newIngredient)
+                newRecipe.ingredients?.append(newIngredient)
             }
         }
-        
+
         // Duplicate instructions
         if let instructions = recipe.instructions {
             for instruction in instructions {
@@ -259,8 +263,8 @@ struct RecipesListView: View {
                     instruction: instruction.instruction,
                     timerDuration: instruction.timerDuration
                 )
-                newRecipe.instructions?.append(newInstruction)
                 modelContext.insert(newInstruction)
+                newRecipe.instructions?.append(newInstruction)
             }
         }
     }

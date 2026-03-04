@@ -9,7 +9,12 @@ import SwiftUI
 
 struct PantryItemRow: View {
     let item: PantryItem
-    
+    /// Called when the user taps the minus button. The parent is responsible for
+    /// deciding whether to decrement the quantity or to prompt for deletion.
+    var onDecrement: () -> Void
+    /// Called when the user taps the plus button.
+    var onIncrement: () -> Void
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             // Image or icon
@@ -29,32 +34,52 @@ struct PantryItemRow: View {
                 }
                 .frame(width: 50, height: 50)
             }
-            
+
             // Item details
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.headline)
-                
+
                 if let brand = item.brand {
                     Text(brand)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
-                HStack(spacing: 8) {
-                    // Quantity
-                    Label("\(item.quantity.formatted()) \(item.unit)", systemImage: "number")
+
+                // Inline quantity stepper + location
+                HStack(spacing: 6) {
+                    // Minus button
+                    Button(action: onDecrement) {
+                        Image(systemName: "minus.circle.fill")
+                            .foregroundStyle(item.quantity <= 0 ? Color.secondary.opacity(0.3) : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(item.quantity <= 0)
+
+                    // Quantity label
+                    Text("\(item.quantity.formatted()) \(item.unit)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
+                        .monospacedDigit()
+
+                    // Plus button
+                    Button(action: onIncrement) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
                     // Location
                     if let location = item.location {
+                        Text("·")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                         Label(location.name, systemImage: location.iconName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 // Expiration info
                 if let daysUntil = item.daysUntilExpiration {
                     HStack(spacing: 4) {
@@ -65,9 +90,9 @@ struct PantryItemRow: View {
                     .foregroundStyle(item.isExpired ? .red : item.isExpiringSoon ? .orange : .secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             // Status indicators
             VStack(alignment: .trailing, spacing: 4) {
                 if let price = item.price {
@@ -75,7 +100,7 @@ struct PantryItemRow: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 if item.isLowStock {
                     Label("Low", systemImage: "arrow.down.circle.fill")
                         .font(.caption)
@@ -85,7 +110,7 @@ struct PantryItemRow: View {
         }
         .padding(.vertical, 4)
     }
-    
+
     private func expirationText(daysUntil: Int) -> String {
         if item.isExpired {
             return "Expired \(abs(daysUntil))d ago"
@@ -101,8 +126,8 @@ struct PantryItemRow: View {
 
 #Preview {
     List {
-        PantryItemRow(item: PantryItem.sampleItems[0])
-        PantryItemRow(item: PantryItem.sampleItems[1])
-        PantryItemRow(item: PantryItem.sampleItems[2])
+        PantryItemRow(item: PantryItem.sampleItems[0], onDecrement: {}, onIncrement: {})
+        PantryItemRow(item: PantryItem.sampleItems[1], onDecrement: {}, onIncrement: {})
+        PantryItemRow(item: PantryItem.sampleItems[2], onDecrement: {}, onIncrement: {})
     }
 }

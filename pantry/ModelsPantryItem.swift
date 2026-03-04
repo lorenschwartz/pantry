@@ -54,6 +54,26 @@ final class PantryItem {
         // This will be compared against a threshold later
         return quantity <= 1
     }
+
+    /// Step size for the inline quantity +/− controls.
+    /// Returns 0.5 for continuous weight and volume units so that half-unit
+    /// increments feel natural (e.g. 1.5 kg → 2.0 kg).
+    /// Returns 1.0 for discrete/countable units and any unrecognised unit.
+    var quantityStepSize: Double {
+        let continuousUnits: Set<String> = [
+            // Weight
+            "g", "mg", "kg", "lb", "lbs", "oz",
+            "gram", "grams", "milligram", "milligrams",
+            "kilogram", "kilograms", "pound", "pounds", "ounce", "ounces",
+            // Volume
+            "ml", "l",
+            "cup", "cups", "tbsp", "tsp",
+            "fl oz", "pint", "pints", "quart", "quarts", "gallon", "gallons",
+            "liter", "liters", "litre", "litres",
+            "milliliter", "milliliters", "millilitre", "millilitres"
+        ]
+        return continuousUnits.contains(unit.lowercased()) ? 0.5 : 1.0
+    }
     
     init(
         id: UUID = UUID(),

@@ -103,4 +103,97 @@ struct PantryItemTests {
         let item = PantryItem(name: "Eggs", quantity: 12)
         #expect(item.isLowStock == false)
     }
+
+    // MARK: - quantityStepSize (weight units → 0.5)
+
+    @Test func quantityStepSize_returnsHalfForGrams() {
+        let item = PantryItem(name: "Flour", unit: "g")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForKilograms() {
+        let item = PantryItem(name: "Sugar", unit: "kg")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForPounds() {
+        let item = PantryItem(name: "Beef", unit: "lb")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForOunces() {
+        let item = PantryItem(name: "Cheese", unit: "oz")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    // MARK: - quantityStepSize (volume units → 0.5)
+
+    @Test func quantityStepSize_returnsHalfForLitres() {
+        let item = PantryItem(name: "Milk", unit: "L")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForMillilitres() {
+        let item = PantryItem(name: "Vanilla", unit: "ml")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForCups() {
+        let item = PantryItem(name: "Oats", unit: "cup")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForTablespoons() {
+        let item = PantryItem(name: "Honey", unit: "tbsp")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_returnsHalfForTeaspoons() {
+        let item = PantryItem(name: "Salt", unit: "tsp")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    // MARK: - quantityStepSize (case insensitivity)
+
+    @Test func quantityStepSize_isCaseInsensitiveForUppercase() {
+        let item = PantryItem(name: "Milk", unit: "KG")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    @Test func quantityStepSize_isCaseInsensitiveForMixedCase() {
+        let item = PantryItem(name: "Juice", unit: "mL")
+        #expect(item.quantityStepSize == 0.5)
+    }
+
+    // MARK: - quantityStepSize (discrete units → 1.0)
+
+    @Test func quantityStepSize_returnsOneForItem() {
+        let item = PantryItem(name: "Eggs", unit: "item")
+        #expect(item.quantityStepSize == 1.0)
+    }
+
+    @Test func quantityStepSize_returnsOneForCan() {
+        let item = PantryItem(name: "Tomatoes", unit: "can")
+        #expect(item.quantityStepSize == 1.0)
+    }
+
+    @Test func quantityStepSize_returnsOneForBottle() {
+        let item = PantryItem(name: "Ketchup", unit: "bottle")
+        #expect(item.quantityStepSize == 1.0)
+    }
+
+    @Test func quantityStepSize_returnsOneForBag() {
+        let item = PantryItem(name: "Chips", unit: "bag")
+        #expect(item.quantityStepSize == 1.0)
+    }
+
+    @Test func quantityStepSize_returnsOneForLoaf() {
+        let item = PantryItem(name: "Bread", unit: "loaf")
+        #expect(item.quantityStepSize == 1.0)
+    }
+
+    @Test func quantityStepSize_returnsOneForUnrecognisedUnit() {
+        let item = PantryItem(name: "Widget", unit: "widget")
+        #expect(item.quantityStepSize == 1.0)
+    }
 }

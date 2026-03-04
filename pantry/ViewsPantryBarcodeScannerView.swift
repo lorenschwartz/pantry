@@ -130,26 +130,29 @@ private struct CornerBrackets: View {
                 path.addLine(to: CGPoint(x: -size/2, y: -size/2))
                 path.addLine(to: CGPoint(x: -size/2 + length, y: -size/2))
             }
+            .stroke(Color.white, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             // Top-right
             Path { path in
                 path.move(to: CGPoint(x: size/2 - length, y: -size/2))
                 path.addLine(to: CGPoint(x: size/2, y: -size/2))
                 path.addLine(to: CGPoint(x: size/2, y: -size/2 + length))
             }
+            .stroke(Color.white, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             // Bottom-right
             Path { path in
                 path.move(to: CGPoint(x: size/2, y: size/2 - length))
                 path.addLine(to: CGPoint(x: size/2, y: size/2))
                 path.addLine(to: CGPoint(x: size/2 - length, y: size/2))
             }
+            .stroke(Color.white, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             // Bottom-left
             Path { path in
                 path.move(to: CGPoint(x: -size/2 + length, y: size/2))
                 path.addLine(to: CGPoint(x: -size/2, y: size/2))
                 path.addLine(to: CGPoint(x: -size/2, y: size/2 - length))
             }
+            .stroke(Color.white, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
         }
-        .stroke(Color.white, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
     }
 }
 

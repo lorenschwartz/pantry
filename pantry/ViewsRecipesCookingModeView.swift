@@ -112,7 +112,7 @@ struct CookingModeView: View {
                 .frame(width: 100, height: 100)
                 .background(
                     Circle()
-                        .fill(completedSteps.contains(instruction.stepNumber) ? Color.green : Color.accentColor)
+                        .fill(completedSteps.contains(instruction.stepNumber) ? Color.green : Color.blue)
                 )
             
             // Instruction text - Large and readable
@@ -187,7 +187,7 @@ struct CookingModeView: View {
                 .bold()
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(currentStepIndex > 0 ? Color.accentColor : Color.gray.opacity(0.3))
+                .background(currentStepIndex > 0 ? Color.blue : Color.gray.opacity(0.3))
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
@@ -211,7 +211,7 @@ struct CookingModeView: View {
                 .bold()
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color.accentColor)
+                .background(Color.blue)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
@@ -235,7 +235,7 @@ struct CookingModeView: View {
                         // Step indicator
                         ZStack {
                             Circle()
-                                .fill(completedSteps.contains(instruction.stepNumber) ? Color.green : (currentStepIndex + 1 == instruction.stepNumber ? Color.accentColor : Color.gray.opacity(0.3)))
+                                .fill(completedSteps.contains(instruction.stepNumber) ? Color.green : (currentStepIndex + 1 == instruction.stepNumber ? Color.blue : Color.gray.opacity(0.3)))
                                 .frame(width: 32, height: 32)
                             
                             if completedSteps.contains(instruction.stepNumber) {
@@ -265,7 +265,7 @@ struct CookingModeView: View {
                         }
                     }
                     .padding()
-                    .background(currentStepIndex + 1 == instruction.stepNumber ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .background(currentStepIndex + 1 == instruction.stepNumber ? Color.blue.opacity(0.1) : Color.clear)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
@@ -290,6 +290,7 @@ struct CookingModeView: View {
                 .multilineTextAlignment(.center)
             
             Button {
+                recipe.markAsCooked()
                 dismiss()
             } label: {
                 Text("Finish Cooking")
@@ -311,7 +312,7 @@ struct CookingModeView: View {
             } label: {
                 Text("Start Over")
                     .font(.headline)
-                    .foregroundStyle(.accentColor)
+                    .foregroundStyle(Color.blue)
             }
         }
         .padding()
@@ -363,49 +364,55 @@ struct CookingModeView: View {
 }
 
 // MARK: - Recipe Timer
+@MainActor
 @Observable
 class RecipeTimer {
     var duration: Int // in seconds
     var remainingTime: Int
     var isPaused = false
     private var timer: Timer?
-    
+
     init(duration: Int) {
         self.duration = duration
         self.remainingTime = duration
     }
-    
+
     var progress: Double {
         guard duration > 0 else { return 0 }
         return 1.0 - (Double(remainingTime) / Double(duration))
     }
-    
+
     var remainingTimeString: String {
         let minutes = remainingTime / 60
         let seconds = remainingTime % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
-    
+
     func start() {
         isPaused = false
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self, !self.isPaused else { return }
-            
-            if self.remainingTime > 0 {
-                self.remainingTime -= 1
-            } else {
-                self.timer?.invalidate()
-                // TODO: Trigger notification or sound
-            }
+        // Ensure the timer is scheduled on the main run loop and handled by a selector method.
+        let newTimer = Timer(timeInterval: 1.0, target: self, selector: #selector(tick(_:)), userInfo: nil, repeats: true)
+        RunLoop.main.add(newTimer, forMode: .common)
+        timer = newTimer
+    }
+
+    @objc private func tick(_ timer: Timer) {
+        // This class is @MainActor, so this method runs on the main actor when called from the main run loop.
+        guard !isPaused else { return }
+        if remainingTime > 0 {
+            remainingTime -= 1
+        } else {
+            timer.invalidate()
+            // TODO: Trigger notification or sound
         }
     }
-    
-    func pause() {
+
+    @MainActor func pause() {
         isPaused.toggle()
     }
-    
-    deinit {
+
+    @MainActor deinit {
         timer?.invalidate()
     }
 }
@@ -483,3 +490,4 @@ struct TimerSheet: View {
     return CookingModeView(recipe: recipe)
         .modelContainer(container)
 }
+

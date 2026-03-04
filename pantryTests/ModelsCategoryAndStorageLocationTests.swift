@@ -8,6 +8,9 @@ import Foundation
 import SwiftData
 @testable import pantry
 
+// Disambiguate from any system-level Category type introduced in iOS 26.
+private typealias Category = pantry.Category
+
 // MARK: - Category
 
 struct CategoryTests {

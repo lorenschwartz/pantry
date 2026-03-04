@@ -59,7 +59,7 @@ struct InsightsView: View {
                             
                             StatCard(
                                 title: "Total Value",
-                                value: "$\(totalValue, specifier: "%.0f")",
+                                value: String(format: "$%.0f", totalValue),
                                 icon: "dollarsign.circle.fill",
                                 color: .green
                             )
@@ -285,44 +285,83 @@ struct QuickActionCard: View {
 // MARK: - Detail Views
 
 struct ExpiredItemsView: View {
+    @Environment(\.modelContext) private var modelContext
     let items: [PantryItem]
-    
+
     var body: some View {
         List(items) { item in
             NavigationLink(destination: ItemDetailView(item: item)) {
-                PantryItemRow(item: item)
+                PantryItemRow(
+                    item: item,
+                    onDecrement: { adjustQuantity(item, by: -item.quantityStepSize) },
+                    onIncrement: { adjustQuantity(item, by: item.quantityStepSize) }
+                )
             }
         }
         .navigationTitle("Expired Items")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    private func adjustQuantity(_ item: PantryItem, by amount: Double) {
+        withAnimation {
+            item.quantity = max(0, item.quantity + amount)
+            item.modifiedDate = Date()
+            try? modelContext.save()
+        }
+    }
 }
 
 struct ExpiringItemsView: View {
+    @Environment(\.modelContext) private var modelContext
     let items: [PantryItem]
-    
+
     var body: some View {
         List(items.sorted { ($0.expirationDate ?? .distantFuture) < ($1.expirationDate ?? .distantFuture) }) { item in
             NavigationLink(destination: ItemDetailView(item: item)) {
-                PantryItemRow(item: item)
+                PantryItemRow(
+                    item: item,
+                    onDecrement: { adjustQuantity(item, by: -item.quantityStepSize) },
+                    onIncrement: { adjustQuantity(item, by: item.quantityStepSize) }
+                )
             }
         }
         .navigationTitle("Expiring Soon")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    private func adjustQuantity(_ item: PantryItem, by amount: Double) {
+        withAnimation {
+            item.quantity = max(0, item.quantity + amount)
+            item.modifiedDate = Date()
+            try? modelContext.save()
+        }
+    }
 }
 
 struct LowStockItemsView: View {
+    @Environment(\.modelContext) private var modelContext
     let items: [PantryItem]
-    
+
     var body: some View {
         List(items.sorted { $0.quantity < $1.quantity }) { item in
             NavigationLink(destination: ItemDetailView(item: item)) {
-                PantryItemRow(item: item)
+                PantryItemRow(
+                    item: item,
+                    onDecrement: { adjustQuantity(item, by: -item.quantityStepSize) },
+                    onIncrement: { adjustQuantity(item, by: item.quantityStepSize) }
+                )
             }
         }
         .navigationTitle("Low Stock")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func adjustQuantity(_ item: PantryItem, by amount: Double) {
+        withAnimation {
+            item.quantity = max(0, item.quantity + amount)
+            item.modifiedDate = Date()
+            try? modelContext.save()
+        }
     }
 }
 

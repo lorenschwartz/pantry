@@ -127,6 +127,14 @@ enum RecipeDifficulty: String, Codable {
         case .hard: return .red
         }
     }
+
+    var sortOrder: Int {
+        switch self {
+        case .easy: return 0
+        case .medium: return 1
+        case .hard: return 2
+        }
+    }
 }
 
 // MARK: - Recipe Ingredient
@@ -139,8 +147,9 @@ final class RecipeIngredient {
     var notes: String? // e.g., "chopped", "room temperature"
     var isOptional: Bool
     var sortOrder: Int
-    
+
     // Relationships
+    @Relationship(inverse: \Recipe.ingredients)
     var recipe: Recipe?
     
     // Optional link to pantry item for inventory matching
@@ -187,8 +196,9 @@ final class RecipeInstruction {
     var instruction: String
     var timerDuration: Int? // in minutes, if this step needs a timer
     var imageData: Data? // Optional image for this step
-    
+
     // Relationships
+    @Relationship(inverse: \Recipe.instructions)
     var recipe: Recipe?
     
     init(
@@ -303,8 +313,9 @@ final class RecipeCookingNote {
     var createdDate: Date
     var rating: Double? // 0-5
     var authorName: String?
-    
+
     // Relationships
+    @Relationship(inverse: \Recipe.cookingNotes)
     var recipe: Recipe?
     
     init(

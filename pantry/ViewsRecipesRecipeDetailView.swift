@@ -227,7 +227,7 @@ struct RecipeDetailView: View {
                         selectedServings += 1
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.accentColor)
+                            .foregroundStyle(.tint)
                     }
                 }
             }
@@ -360,7 +360,6 @@ struct RecipeDetailView: View {
     private var cookingModeButton: some View {
         Button {
             showCookingMode = true
-            recipe.markAsCooked()
         } label: {
             HStack {
                 Image(systemName: "play.fill")
@@ -520,7 +519,7 @@ struct InstructionRow: View {
                 } label: {
                     Text(isCompleted ? "Mark Incomplete" : "Mark Complete")
                         .font(.caption)
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(.tint)
                 }
             }
             

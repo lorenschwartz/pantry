@@ -20,6 +20,9 @@ struct PantryListView: View {
     @State private var sortOrder: SortOrder = .name
     @State private var showingAddItem = false
     @State private var showingFilters = false
+    /// Set to a non-nil item when a decrement would bring quantity to zero;
+    /// triggers the "Remove from pantry?" confirmation dialog.
+    @State private var itemPendingDelete: PantryItem?
     
     enum SortOrder: String, CaseIterable {
         case name = "Name"
@@ -113,7 +116,21 @@ struct PantryListView: View {
                             NavigationLink {
                                 ItemDetailView(item: item)
                             } label: {
-                                PantryItemRow(item: item)
+                                PantryItemRow(
+                                    item: item,
+                                    onDecrement: {
+                                        let step = item.quantityStepSize
+                                        if item.quantity - step <= 0 {
+                                            // Prompt instead of silently hitting zero
+                                            itemPendingDelete = item
+                                        } else {
+                                            adjustQuantity(item, by: -step)
+                                        }
+                                    },
+                                    onIncrement: {
+                                        adjustQuantity(item, by: item.quantityStepSize)
+                                    }
+                                )
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
@@ -121,28 +138,13 @@ struct PantryListView: View {
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
-                                
+
                                 Button {
                                     // Quick edit action
                                 } label: {
                                     Label("Edit", systemImage: "pencil")
                                 }
                                 .tint(.blue)
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    adjustQuantity(item, by: -1)
-                                } label: {
-                                    Label("Decrease", systemImage: "minus.circle")
-                                }
-                                .tint(.orange)
-                                
-                                Button {
-                                    adjustQuantity(item, by: 1)
-                                } label: {
-                                    Label("Increase", systemImage: "plus.circle")
-                                }
-                                .tint(.green)
                             }
                         }
                     }
@@ -198,6 +200,26 @@ struct PantryListView: View {
             }
             .sheet(isPresented: $showingAddItem) {
                 AddEditItemView()
+            }
+            .confirmationDialog(
+                "Remove \"\(itemPendingDelete?.name ?? "")\"?",
+                isPresented: Binding(
+                    get: { itemPendingDelete != nil },
+                    set: { if !$0 { itemPendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Remove from Pantry", role: .destructive) {
+                    if let item = itemPendingDelete {
+                        deleteItem(item)
+                    }
+                    itemPendingDelete = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    itemPendingDelete = nil
+                }
+            } message: {
+                Text("Decrementing this item would bring its quantity to zero.")
             }
             .onAppear {
                 initializeDefaultData()

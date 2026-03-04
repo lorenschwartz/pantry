@@ -54,7 +54,10 @@ final class ReceiptItem {
     var isAddedToPantry: Bool
     
     // Relationships
+    @Relationship(inverse: \Receipt.items)
     var receipt: Receipt?
+
+    @Relationship(inverse: \PantryItem.receiptItem)
     var pantryItem: PantryItem?
     
     init(

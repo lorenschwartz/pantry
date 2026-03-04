@@ -60,11 +60,11 @@ final class ShoppingListItem {
 extension ShoppingListItem {
     static var sampleItems: [ShoppingListItem] {
         [
-            ShoppingListItem(name: "Milk", quantity: 1, unit: "gallon", priority: 2),
-            ShoppingListItem(name: "Bread", quantity: 2, unit: "loaves", priority: 1),
-            ShoppingListItem(name: "Bananas", quantity: 6, unit: "count", priority: 1),
-            ShoppingListItem(name: "Coffee", quantity: 1, unit: "bag", notes: "Medium roast", priority: 2),
-            ShoppingListItem(name: "Butter", quantity: 1, unit: "lb", priority: 0, isChecked: true)
+            ShoppingListItem(name: "Milk", quantity: 1, unit: "gallon", isChecked: false, priority: 2),
+            ShoppingListItem(name: "Bread", quantity: 2, unit: "loaves", isChecked: false, priority: 1),
+            ShoppingListItem(name: "Bananas", quantity: 6, unit: "count", isChecked: false, priority: 1),
+            ShoppingListItem(name: "Coffee", quantity: 1, unit: "bag", notes: "Medium roast", isChecked: false, priority: 2),
+            ShoppingListItem(name: "Butter", quantity: 1, unit: "lb", isChecked: true, priority: 0)
         ]
     }
 }
