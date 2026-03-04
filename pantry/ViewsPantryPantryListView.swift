@@ -176,18 +176,18 @@ struct PantryListView: View {
                             Button("All Categories") {
                                 selectedCategory = nil
                             }
-                            ForEach(categories.sorted(by: { $0.sortOrder < $1.sortOrder })) { category in
+                            ForEach(uniqueCategories) { category in
                                 Button(category.name) {
                                     selectedCategory = category
                                 }
                             }
                         }
-                        
+
                         Menu("Filter by Location") {
                             Button("All Locations") {
                                 selectedLocation = nil
                             }
-                            ForEach(locations.sorted(by: { $0.sortOrder < $1.sortOrder })) { location in
+                            ForEach(uniqueLocations) { location in
                                 Button(location.name) {
                                     selectedLocation = location
                                 }
@@ -255,6 +255,27 @@ struct PantryListView: View {
         }
     }
     
+    // MARK: - Deduplicated Filter Sources
+
+    /// Categories sorted by sortOrder with duplicate names removed (defensive guard
+    /// against the seeding race condition that could insert the defaults twice).
+    private var uniqueCategories: [Category] {
+        var seen = Set<String>()
+        return categories
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
+            .filter { seen.insert($0.name).inserted }
+    }
+
+    /// Locations sorted by sortOrder with duplicate names removed.
+    private var uniqueLocations: [StorageLocation] {
+        var seen = Set<String>()
+        return locations
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
+            .filter { seen.insert($0.name).inserted }
+    }
+
+    // MARK: - Data Initialisation
+
     private func initializeDefaultData() {
         // Query the store directly rather than using the @Query property, which can be
         // stale at onAppear time and cause duplicate inserts on repeated appearances.
@@ -263,6 +284,9 @@ struct PantryListView: View {
             for category in Category.defaultCategories {
                 modelContext.insert(category)
             }
+        } else if categoryCount > Category.defaultCategories.count {
+            // Extra rows exist from a previous seeding race — clean them up.
+            deduplicateCategories()
         }
 
         let locationCount = (try? modelContext.fetchCount(FetchDescriptor<StorageLocation>())) ?? 0
@@ -270,9 +294,45 @@ struct PantryListView: View {
             for location in StorageLocation.defaultLocations {
                 modelContext.insert(location)
             }
+        } else if locationCount > StorageLocation.defaultLocations.count {
+            deduplicateLocations()
         }
 
         try? modelContext.save()
+    }
+
+    /// Removes duplicate Category rows, re-assigning any PantryItem references to
+    /// the canonical (first-by-sortOrder) row before deletion.
+    private func deduplicateCategories() {
+        let all = (try? modelContext.fetch(
+            FetchDescriptor<Category>(sortBy: [SortDescriptor(\.sortOrder)])
+        )) ?? []
+        var canonical: [String: Category] = [:]
+        for category in all {
+            if let existing = canonical[category.name] {
+                for item in category.items ?? [] { item.category = existing }
+                modelContext.delete(category)
+            } else {
+                canonical[category.name] = category
+            }
+        }
+    }
+
+    /// Removes duplicate StorageLocation rows, re-assigning any PantryItem references
+    /// to the canonical (first-by-sortOrder) row before deletion.
+    private func deduplicateLocations() {
+        let all = (try? modelContext.fetch(
+            FetchDescriptor<StorageLocation>(sortBy: [SortDescriptor(\.sortOrder)])
+        )) ?? []
+        var canonical: [String: StorageLocation] = [:]
+        for location in all {
+            if let existing = canonical[location.name] {
+                for item in location.items ?? [] { item.location = existing }
+                modelContext.delete(location)
+            } else {
+                canonical[location.name] = location
+            }
+        }
     }
 }
 
