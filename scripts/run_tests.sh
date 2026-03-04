@@ -13,12 +13,31 @@
 # Output:
 #   • Raw xcodebuild output → /tmp/pantry_test_output.txt
 #   • Structured result bundle → TestResults.xcresult  (double-click to open)
+#
+# Notes:
+#   This script is also installed as .git/hooks/pre-push via a symlink.
+#   Two quirks are handled for that use-case:
+#     1. Symlink resolution: $0 points to .git/hooks/pre-push, not the real
+#        script, so we resolve the real path before computing PROJECT_DIR.
+#     2. Git passes <remote-name> <remote-url> as $1/$2 to pre-push hooks;
+#        we only treat $1 as a simulator UDID when it matches UUID format.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+# ─── 0. Resolve the real script location (survives symlinks) ─────────────────
+# When invoked as .git/hooks/pre-push -> ../../scripts/run_tests.sh,
+# $0 is the symlink path (.git/hooks/pre-push), not the target.
+# Follow the chain of symlinks to reach the actual file.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    LINK_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$LINK_DIR/$SOURCE"
+done
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+PROJECT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 SCHEME="pantry"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT="$PROJECT_DIR/pantry.xcodeproj"
 RESULTS="$PROJECT_DIR/TestResults.xcresult"
 LOG="/tmp/pantry_test_output.txt"
@@ -28,9 +47,14 @@ echo "  🧪  Pantry — Test Runner"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ─── 1. Resolve the simulator UDID ───────────────────────────────────────────
+# Only treat $1 as a simulator UDID if it matches the standard UUID format.
+# When invoked as a git pre-push hook, git passes:
+#   $1 = remote name (e.g. "origin")
+#   $2 = remote URL
+# — neither of which is a valid UDID.
+UDID_RE='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
 
-if [ "${1:-}" != "" ]; then
-  # Caller passed an explicit UDID.
+if [[ "${1:-}" =~ $UDID_RE ]]; then
   SIMULATOR_UDID="$1"
   echo "📱  Using provided simulator: $SIMULATOR_UDID"
 else
@@ -113,7 +137,8 @@ set -e
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-if grep -q "** TEST SUCCEEDED **" "$LOG"; then
+# Use -F (fixed string) to avoid treating "**" as a regex repetition operator.
+if grep -qF "** TEST SUCCEEDED **" "$LOG"; then
   echo "  ✅  All tests passed."
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 0
