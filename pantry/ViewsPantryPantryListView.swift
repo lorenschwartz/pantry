@@ -284,55 +284,20 @@ struct PantryListView: View {
             for category in Category.defaultCategories {
                 modelContext.insert(category)
             }
-        } else if categoryCount > Category.defaultCategories.count {
-            // Extra rows exist from a previous seeding race — clean them up.
-            deduplicateCategories()
         }
+        // Note: if duplicates exist from a previous seeding race, uniqueCategories /
+        // uniqueLocations (above) hide them in the UI safely. We do NOT delete them
+        // here — deleting SwiftData objects while @Query holds live references to them
+        // causes a fatal "backing data invalidated" crash.
 
         let locationCount = (try? modelContext.fetchCount(FetchDescriptor<StorageLocation>())) ?? 0
         if locationCount == 0 {
             for location in StorageLocation.defaultLocations {
                 modelContext.insert(location)
             }
-        } else if locationCount > StorageLocation.defaultLocations.count {
-            deduplicateLocations()
         }
 
         try? modelContext.save()
-    }
-
-    /// Removes duplicate Category rows, re-assigning any PantryItem references to
-    /// the canonical (first-by-sortOrder) row before deletion.
-    private func deduplicateCategories() {
-        let all = (try? modelContext.fetch(
-            FetchDescriptor<Category>(sortBy: [SortDescriptor(\.sortOrder)])
-        )) ?? []
-        var canonical: [String: Category] = [:]
-        for category in all {
-            if let existing = canonical[category.name] {
-                for item in category.items ?? [] { item.category = existing }
-                modelContext.delete(category)
-            } else {
-                canonical[category.name] = category
-            }
-        }
-    }
-
-    /// Removes duplicate StorageLocation rows, re-assigning any PantryItem references
-    /// to the canonical (first-by-sortOrder) row before deletion.
-    private func deduplicateLocations() {
-        let all = (try? modelContext.fetch(
-            FetchDescriptor<StorageLocation>(sortBy: [SortDescriptor(\.sortOrder)])
-        )) ?? []
-        var canonical: [String: StorageLocation] = [:]
-        for location in all {
-            if let existing = canonical[location.name] {
-                for item in location.items ?? [] { item.location = existing }
-                modelContext.delete(location)
-            } else {
-                canonical[location.name] = location
-            }
-        }
     }
 }
 
