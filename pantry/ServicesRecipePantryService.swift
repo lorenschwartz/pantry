@@ -148,22 +148,29 @@ class RecipePantryService {
     
     // MARK: - Shopping List Generation
     
-    /// Generate shopping list items for missing ingredients
+    /// Generate shopping list items for missing ingredients.
+    /// Pass `categories` to have each item automatically assigned to a store aisle.
     static func generateShoppingList(
         recipe: Recipe,
         pantryItems: [PantryItem],
-        scaleFactor: Double = 1.0
+        scaleFactor: Double = 1.0,
+        categories: [Category] = []
     ) -> [ShoppingListItem] {
-        
+
         let result = checkRecipeMakeable(recipe: recipe, pantryItems: pantryItems)
-        
+
         return result.missingIngredients.map { ingredient in
-            ShoppingListItem(
+            let category = AisleCategorizationService.suggestCategory(
+                for: ingredient.name,
+                from: categories
+            )
+            return ShoppingListItem(
                 name: ingredient.name,
                 quantity: ingredient.quantity * scaleFactor,
                 unit: ingredient.unit,
                 notes: ingredient.notes,
                 priority: 1,
+                category: category,
                 relatedPantryItemID: nil
             )
         }
