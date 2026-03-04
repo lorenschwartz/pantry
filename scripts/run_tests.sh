@@ -6,6 +6,12 @@
 #   ./scripts/run_tests.sh              # auto-detect booted simulator
 #   ./scripts/run_tests.sh <UDID>       # run on a specific simulator UDID
 #
+# When invoked as a git pre-push hook the script runs the full test suite
+# only if a simulator is already booted.  If no simulator is available it
+# prints a warning and exits 0 (does not block the push) so day-to-day
+# pushes are never accidentally blocked by a missing simulator.
+# Use GitHub Actions (ci.yml) as the authoritative CI gate.
+#
 # Requirements:
 #   • Xcode command-line tools installed  (xcode-select --install)
 #   • At least one iOS Simulator available (see: xcrun simctl list devices)
@@ -13,21 +19,12 @@
 # Output:
 #   • Raw xcodebuild output → /tmp/pantry_test_output.txt
 #   • Structured result bundle → TestResults.xcresult  (double-click to open)
-#
-# Notes:
-#   This script is also installed as .git/hooks/pre-push via a symlink.
-#   Two quirks are handled for that use-case:
-#     1. Symlink resolution: $0 points to .git/hooks/pre-push, not the real
-#        script, so we resolve the real path before computing PROJECT_DIR.
-#     2. Git passes <remote-name> <remote-url> as $1/$2 to pre-push hooks;
-#        we only treat $1 as a simulator UDID when it matches UUID format.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 # ─── 0. Resolve the real script location (survives symlinks) ─────────────────
 # When invoked as .git/hooks/pre-push -> ../../scripts/run_tests.sh,
 # $0 is the symlink path (.git/hooks/pre-push), not the target.
-# Follow the chain of symlinks to reach the actual file.
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
     LINK_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
@@ -46,58 +43,76 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  🧪  Pantry — Test Runner"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Helper: parse JSON from simctl safely; returns empty string on any error.
+simctl_udid() {
+  local json_args=("$@")
+  python3 - "${json_args[@]}" <<'PYEOF' 2>/dev/null || echo ""
+import sys, json
+
+raw = sys.stdin.read().strip()
+if not raw:
+    sys.exit(0)
+
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError:
+    sys.exit(0)
+
+mode = sys.argv[1] if len(sys.argv) > 1 else "booted"
+
+runtimes = sorted(data.get("devices", {}).keys(), reverse=True)
+for rt in runtimes:
+    if "iOS" not in rt:
+        continue
+    for d in data["devices"][rt]:
+        if not d.get("isAvailable", True):
+            continue
+        if mode == "booted" and d.get("state") == "Booted":
+            print(d["udid"]); sys.exit(0)
+        elif mode == "iphone16" and "iPhone 16" in d.get("name", ""):
+            print(d["udid"]); sys.exit(0)
+        elif mode == "iphone" and "iPhone" in d.get("name", ""):
+            print(d["udid"]); sys.exit(0)
+PYEOF
+}
+
 # ─── 1. Resolve the simulator UDID ───────────────────────────────────────────
-# Only treat $1 as a simulator UDID if it matches the standard UUID format.
+# Only treat $1 as a simulator UDID when it matches the standard UUID format.
 # When invoked as a git pre-push hook, git passes:
-#   $1 = remote name (e.g. "origin")
-#   $2 = remote URL
-# — neither of which is a valid UDID.
+#   $1 = remote name (e.g. "origin")   $2 = remote URL
 UDID_RE='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
 
 if [[ "${1:-}" =~ $UDID_RE ]]; then
+  # Explicit UDID passed by CI (GitHub Actions).
   SIMULATOR_UDID="$1"
   echo "📱  Using provided simulator: $SIMULATOR_UDID"
 else
-  # Look for the first currently-booted iOS simulator.
-  SIMULATOR_UDID=$(
-    xcrun simctl list devices booted --json 2>/dev/null \
-    | python3 - <<'PYEOF'
-import sys, json
-data = json.load(sys.stdin)
-for devs in data.get("devices", {}).values():
-    for d in devs:
-        if d.get("state") == "Booted" and d.get("isAvailable", True):
-            print(d["udid"]); exit()
-print("")
-PYEOF
-  )
+  # Auto-detect: prefer a currently-booted device.
+  SIMULATOR_UDID=$(xcrun simctl list devices booted --json 2>/dev/null \
+    | simctl_udid booted)
 
   if [ -z "$SIMULATOR_UDID" ]; then
-    # No booted simulator — try to find and boot an iPhone 16.
+    # No booted simulator.  When running as a pre-push hook skip gracefully
+    # so the push is never accidentally blocked by a missing simulator.
+    # Full CI runs happen on GitHub Actions (ci.yml).
+    if [[ "${GIT_PUSH_OPTION_COUNT:-}" != "" ]] || \
+       [[ "$(ps -o comm= -p $PPID 2>/dev/null || true)" == *"git"* ]]; then
+      echo "⚠️   No booted simulator — skipping local tests (CI will run them)."
+      echo "    To run tests locally: open Simulator.app, then re-push, or run:"
+      echo "    ./scripts/run_tests.sh"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      exit 0
+    fi
+
+    # Not a hook invocation — try to find and boot an iPhone 16.
     echo "⚠️   No booted simulator found. Looking for an available iPhone 16…"
-    SIMULATOR_UDID=$(
-      xcrun simctl list devices available --json 2>/dev/null \
-      | python3 - <<'PYEOF'
-import sys, json
-data = json.load(sys.stdin)
-# Prefer newer runtimes first.
-runtimes = sorted(data.get("devices", {}).keys(), reverse=True)
-for runtime in runtimes:
-    if "iOS" not in runtime:
-        continue
-    for d in data["devices"][runtime]:
-        if d.get("isAvailable") and "iPhone 16" in d.get("name", ""):
-            print(d["udid"]); exit()
-# Fallback: any available iPhone.
-for runtime in runtimes:
-    if "iOS" not in runtime:
-        continue
-    for d in data["devices"][runtime]:
-        if d.get("isAvailable") and "iPhone" in d.get("name", ""):
-            print(d["udid"]); exit()
-print("")
-PYEOF
-    )
+    SIMULATOR_UDID=$(xcrun simctl list devices available --json 2>/dev/null \
+      | simctl_udid iphone16)
+
+    if [ -z "$SIMULATOR_UDID" ]; then
+      SIMULATOR_UDID=$(xcrun simctl list devices available --json 2>/dev/null \
+        | simctl_udid iphone)
+    fi
 
     if [ -z "$SIMULATOR_UDID" ]; then
       echo "❌  No iOS simulator available."
@@ -107,7 +122,6 @@ PYEOF
 
     echo "🔄  Booting simulator $SIMULATOR_UDID …"
     xcrun simctl boot "$SIMULATOR_UDID"
-    # Give the system a few seconds to finish booting.
     sleep 5
   fi
 
@@ -120,10 +134,9 @@ echo "📂  Project : $PROJECT"
 echo "🎯  Scheme  : $SCHEME"
 echo ""
 
-# Remove any stale result bundle so Xcode doesn't merge with an old run.
 rm -rf "$RESULTS"
 
-set +e   # Don't exit on xcodebuild failure — we inspect the output instead.
+set +e
 xcodebuild test \
   -project     "$PROJECT"  \
   -scheme      "$SCHEME"   \
@@ -137,7 +150,7 @@ set -e
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-# Use -F (fixed string) to avoid treating "**" as a regex repetition operator.
+# -F = fixed-string; avoids regex errors from "**" in the xcodebuild output.
 if grep -qF "** TEST SUCCEEDED **" "$LOG"; then
   echo "  ✅  All tests passed."
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
