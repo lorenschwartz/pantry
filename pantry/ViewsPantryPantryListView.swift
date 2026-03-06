@@ -13,12 +13,13 @@ struct PantryListView: View {
     @Query(sort: \PantryItem.name) private var items: [PantryItem]
     @Query private var categories: [Category]
     @Query private var locations: [StorageLocation]
-    
+
+    @Binding var showAddItem: Bool
+
     @State private var searchText = ""
     @State private var selectedCategory: Category?
     @State private var selectedLocation: StorageLocation?
     @State private var sortOrder: SortOrder = .name
-    @State private var showingAddItem = false
     @State private var showingFilters = false
     /// Set to a non-nil item when a decrement would bring quantity to zero;
     /// triggers the "Remove from pantry?" confirmation dialog.
@@ -169,9 +170,9 @@ struct PantryListView: View {
                                 Text(order.rawValue).tag(order)
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         Menu("Filter by Category") {
                             Button("All Categories") {
                                 selectedCategory = nil
@@ -197,16 +198,8 @@ struct PantryListView: View {
                         Label("Options", systemImage: "line.3.horizontal.decrease.circle")
                     }
                 }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingAddItem = true
-                    } label: {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
             }
-            .sheet(isPresented: $showingAddItem) {
+            .sheet(isPresented: $showAddItem) {
                 AddEditItemView()
             }
             .confirmationDialog(
@@ -302,6 +295,6 @@ struct PantryListView: View {
 }
 
 #Preview {
-    PantryListView()
+    PantryListView(showAddItem: .constant(false))
         .modelContainer(for: [PantryItem.self, Category.self, StorageLocation.self], inMemory: true)
 }
