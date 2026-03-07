@@ -14,33 +14,33 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
+            DashboardView()
+                .tabItem {
+                    Label("Dashboard", systemImage: "house.fill")
+                }
+                .tag(0)
+
             PantryListView()
                 .tabItem {
                     Label("Pantry", systemImage: "cabinet")
                 }
-                .tag(0)
-            
+                .tag(1)
+
             ShoppingListView()
                 .tabItem {
                     Label("Shopping", systemImage: "cart")
                 }
-                .tag(1)
-            
+                .tag(2)
+
             RecipesListView()
                 .tabItem {
                     Label("Recipes", systemImage: "book")
                 }
-                .tag(2)
-            
+                .tag(3)
+
             ReceiptsListView()
                 .tabItem {
                     Label("Receipts", systemImage: "doc.text")
-                }
-                .tag(3)
-            
-            InsightsView()
-                .tabItem {
-                    Label("Insights", systemImage: "chart.bar")
                 }
                 .tag(4)
 
