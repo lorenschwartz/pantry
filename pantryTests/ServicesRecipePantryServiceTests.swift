@@ -8,6 +8,48 @@ import Foundation
 import SwiftData
 @testable import pantry
 
+// MARK: - estimatedShelfLifeDays
+
+struct EstimatedShelfLifeDaysTests {
+
+    @Test func estimatedShelfLifeDays_returnsSevenDaysForProduce() {
+        let category = Category(name: "Produce", colorHex: "#34C759", iconName: "leaf")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: category) == 7)
+    }
+
+    @Test func estimatedShelfLifeDays_returnsFourteenDaysForDairy() {
+        let category = Category(name: "Dairy", colorHex: "#5AC8FA", iconName: "drop")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: category) == 14)
+    }
+
+    @Test func estimatedShelfLifeDays_returnsThreeDaysForProteins() {
+        let category = Category(name: "Proteins", colorHex: "#FF3B30", iconName: "flame")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: category) == 3)
+    }
+
+    @Test func estimatedShelfLifeDays_returns180DaysForFrozen() {
+        let category = Category(name: "Frozen", colorHex: "#64D2FF", iconName: "snowflake")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: category) == 180)
+    }
+
+    @Test func estimatedShelfLifeDays_returns730DaysForCanned() {
+        let category = Category(name: "Canned", colorHex: "#BF5AF2", iconName: "cylinder")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: category) == 730)
+    }
+
+    @Test func estimatedShelfLifeDays_isCaseInsensitive() {
+        let lower = Category(name: "produce", colorHex: "#34C759", iconName: "leaf")
+        let upper = Category(name: "PRODUCE", colorHex: "#34C759", iconName: "leaf")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: lower) == 7)
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: upper) == 7)
+    }
+
+    @Test func estimatedShelfLifeDays_returnsNilForUnknownCategory() {
+        let custom = Category(name: "My Special Sauce", colorHex: "#FF0000", iconName: "star")
+        #expect(RecipePantryService.estimatedShelfLifeDays(for: custom) == nil)
+    }
+}
+
 // MARK: - Unit Conversion (no models needed)
 
 struct ConvertQuantityTests {
