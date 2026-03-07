@@ -43,16 +43,28 @@ struct MainTabView: View {
                 }
                 .tag(4)
 
+            ChatView()
+                .tabItem {
+                    Label("Assistant", systemImage: "sparkles")
+                }
+                .tag(5)
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(5)
+                .tag(6)
         }
     }
 }
 
 #Preview {
     MainTabView()
-        .modelContainer(for: [PantryItem.self, Category.self, StorageLocation.self], inMemory: true)
+        .modelContainer(for: [
+            PantryItem.self, Category.self, StorageLocation.self,
+            ShoppingListItem.self, Recipe.self, RecipeIngredient.self,
+            RecipeInstruction.self, RecipeCategory.self, RecipeTag.self,
+            RecipeCookingNote.self, RecipeCollection.self,
+            Receipt.self, ReceiptItem.self, BarcodeMapping.self
+        ], inMemory: true)
 }

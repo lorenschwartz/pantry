@@ -82,6 +82,15 @@ PYEOF
 #   $1 = remote name (e.g. "origin")   $2 = remote URL
 UDID_RE='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
 
+# Detect probable git hook invocation (git pre-push passes remote + URL args).
+PARENT_CMD="$(ps -o comm= -p "$PPID" 2>/dev/null || true)"
+IS_GIT_HOOK=false
+if [[ "$PARENT_CMD" == *"git"* ]] || [[ "$PARENT_CMD" == *"hooks"* ]]; then
+  IS_GIT_HOOK=true
+elif [[ -n "${1:-}" && -n "${2:-}" && ! "${1:-}" =~ $UDID_RE ]]; then
+  IS_GIT_HOOK=true
+fi
+
 if [[ "${1:-}" =~ $UDID_RE ]]; then
   # Explicit UDID passed by CI (GitHub Actions).
   SIMULATOR_UDID="$1"
@@ -95,8 +104,7 @@ else
     # No booted simulator.  When running as a pre-push hook skip gracefully
     # so the push is never accidentally blocked by a missing simulator.
     # Full CI runs happen on GitHub Actions (ci.yml).
-    if [[ "${GIT_PUSH_OPTION_COUNT:-}" != "" ]] || \
-       [[ "$(ps -o comm= -p $PPID 2>/dev/null || true)" == *"git"* ]]; then
+    if [[ "$IS_GIT_HOOK" == true ]]; then
       echo "⚠️   No booted simulator — skipping local tests (CI will run them)."
       echo "    To run tests locally: open Simulator.app, then re-push, or run:"
       echo "    ./scripts/run_tests.sh"
@@ -138,8 +146,8 @@ rm -rf "$RESULTS"
 
 set +e
 xcodebuild test \
-  -project     "$PROJECT"  \
-  -scheme      "$SCHEME"   \
+  -project     "$PROJECT" \
+  -scheme      "$SCHEME"  \
   -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
   -resultBundlePath "$RESULTS" \
   2>&1 | tee "$LOG"
