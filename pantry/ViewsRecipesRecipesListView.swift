@@ -11,13 +11,14 @@ import SwiftData
 struct RecipesListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recipe.modifiedDate, order: .reverse) private var recipes: [Recipe]
-    
+
+    @Binding var showAddRecipe: Bool
+
     @State private var searchText = ""
     @State private var selectedCategory: RecipeCategory?
     @State private var selectedDifficulty: RecipeDifficulty?
     @State private var showFavoritesOnly = false
     @State private var showMakeableOnly = false
-    @State private var showAddRecipe = false
     
     var filteredRecipes: [Recipe] {
         recipes.filter { recipe in
@@ -66,14 +67,6 @@ struct RecipesListView: View {
             .searchable(text: $searchText, prompt: "Search recipes")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddRecipe = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         filterMenu
                     } label: {
@@ -93,12 +86,7 @@ struct RecipesListView: View {
         ContentUnavailableView {
             Label("No Recipes Yet", systemImage: "book")
         } description: {
-            Text("Add your first recipe to get started")
-        } actions: {
-            Button("Add Recipe") {
-                showAddRecipe = true
-            }
-            .buttonStyle(.borderedProminent)
+            Text("Tap the + button below to add your first recipe")
         }
     }
     
@@ -367,6 +355,6 @@ struct FilterChip: View {
 
 // MARK: - Preview
 #Preview {
-    RecipesListView()
+    RecipesListView(showAddRecipe: .constant(false))
         .modelContainer(for: [Recipe.self], inMemory: true)
 }

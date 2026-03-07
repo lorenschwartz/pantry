@@ -174,7 +174,7 @@ struct InsightsView: View {
                             }
                             
                             NavigationLink {
-                                PantryListView()
+                                PantryListView(showAddItem: .constant(false))
                             } label: {
                                 QuickActionCard(
                                     title: "Browse Pantry",

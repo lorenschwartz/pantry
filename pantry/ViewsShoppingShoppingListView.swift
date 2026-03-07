@@ -14,7 +14,8 @@ struct ShoppingListView: View {
     @Query(sort: \ShoppingListItem.priority, order: .reverse) private var allItems: [ShoppingListItem]
     @Query(sort: \Category.sortOrder) private var categories: [Category]
 
-    @State private var showAddItem = false
+    @Binding var showAddItem: Bool
+
     @State private var showCheckedItems = false
     /// Persisted across sessions; defaults to aisle grouping.
     @AppStorage("shoppingListSortBy") private var sortByRaw: String = SortOption.aisle.rawValue
@@ -121,12 +122,7 @@ struct ShoppingListView: View {
                     ContentUnavailableView {
                         Label("Shopping List Empty", systemImage: "cart")
                     } description: {
-                        Text("Add items manually or they'll be added automatically when pantry items run low")
-                    } actions: {
-                        Button("Add Item") {
-                            showAddItem = true
-                        }
-                        .buttonStyle(.borderedProminent)
+                        Text("Tap the + button below to add items, or they'll be added automatically when pantry items run low")
                     }
                 } else {
                     List {
@@ -206,14 +202,6 @@ struct ShoppingListView: View {
             }
             .navigationTitle("Shopping List")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddItem = true
-                    } label: {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-
                 if !allItems.isEmpty {
                     ToolbarItem(placement: .topBarLeading) {
                         Menu {
@@ -500,6 +488,6 @@ struct AddShoppingListItemView: View {
         container.mainContext.insert(item)
     }
 
-    return ShoppingListView()
+    return ShoppingListView(showAddItem: .constant(false))
         .modelContainer(container)
 }

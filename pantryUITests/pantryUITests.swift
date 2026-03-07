@@ -254,6 +254,8 @@ final class PantryRegressionTests: XCTestCase {
         app.navigationBars["Shopping List"].buttons["Add Item"].tap()
         XCTAssertTrue(app.navigationBars["Add to List"].waitForExistence(timeout: 5))
         let nameField = app.textFields["Item Name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 3),
+                      "Item Name text field should be visible in the Add to List sheet")
         nameField.tap()
         nameField.typeText("Eggs")
         app.navigationBars["Add to List"].buttons["Add"].tap()

@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "iOS Simulator (iPhone 17 Pro)",
+      "runtimeExecutable": "xcodebuild",
+      "runtimeArgs": [
+        "-scheme", "pantry",
+        "-destination", "platform=iOS Simulator,id=5218272A-21F6-4B96-909B-784196D1B6FB",
+        "build"
+      ],
+      "port": 0
+    },
+    {
+      "name": "Run Tests",
+      "runtimeExecutable": "xcodebuild",
+      "runtimeArgs": [
+        "test",
+        "-scheme", "pantry",
+        "-destination", "platform=iOS Simulator,id=5218272A-21F6-4B96-909B-784196D1B6FB"
+      ],
+      "port": 0
+    }
+  ]
+}

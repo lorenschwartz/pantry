@@ -15,7 +15,7 @@ struct ReceiptsListView: View {
     // MARK: - Scan-flow state
 
     /// Controls the "Camera vs Photos" source picker dialog.
-    @State private var showingSourcePicker = false
+    @Binding var showingSourcePicker: Bool
     /// Controls `DocumentScannerView` full-screen cover.
     @State private var isScanning = false
     /// Controls `PhotoPickerView` sheet.
@@ -38,16 +38,6 @@ struct ReceiptsListView: View {
                 if isProcessing { processingOverlay }
             }
             .navigationTitle("Receipts")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingSourcePicker = true
-                    } label: {
-                        Label("Scan Receipt", systemImage: "plus")
-                    }
-                    .disabled(isProcessing)
-                }
-            }
             // Source picker
             .confirmationDialog("Add Receipt", isPresented: $showingSourcePicker) {
                 Button("Scan Document") { isScanning = true }
@@ -116,7 +106,7 @@ struct ReceiptsListView: View {
             ContentUnavailableView(
                 "No Receipts",
                 systemImage: "doc.text.viewfinder",
-                description: Text("Tap + to scan or import a receipt")
+                description: Text("Tap the + button below to scan or import a receipt")
             )
         } else {
             List {
@@ -230,6 +220,6 @@ private struct ReceiptListRow: View {
 }
 
 #Preview {
-    ReceiptsListView()
+    ReceiptsListView(showingSourcePicker: .constant(false))
         .modelContainer(for: [Receipt.self, ReceiptItem.self, PantryItem.self], inMemory: true)
 }
