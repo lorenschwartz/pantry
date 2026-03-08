@@ -45,35 +45,37 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # Helper: parse JSON from simctl safely; returns empty string on any error.
 simctl_udid() {
-  local json_args=("$@")
-  python3 - "${json_args[@]}" <<'PYEOF' 2>/dev/null || echo ""
-import sys, json
-
-raw = sys.stdin.read().strip()
-if not raw:
-    sys.exit(0)
-
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError:
-    sys.exit(0)
+  local mode="${1:-booted}"
+  python3 -c '
+import json, sys
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "booted"
+raw = sys.stdin.read().strip()
+if not raw:
+  sys.exit(0)
+
+try:
+  data = json.loads(raw)
+except Exception:
+  sys.exit(0)
 
 runtimes = sorted(data.get("devices", {}).keys(), reverse=True)
 for rt in runtimes:
-    if "iOS" not in rt:
-        continue
-    for d in data["devices"][rt]:
-        if not d.get("isAvailable", True):
-            continue
-        if mode == "booted" and d.get("state") == "Booted":
-            print(d["udid"]); sys.exit(0)
-        elif mode == "iphone16" and "iPhone 16" in d.get("name", ""):
-            print(d["udid"]); sys.exit(0)
-        elif mode == "iphone" and "iPhone" in d.get("name", ""):
-            print(d["udid"]); sys.exit(0)
-PYEOF
+  if "iOS" not in rt:
+    continue
+  for d in data.get("devices", {}).get(rt, []):
+    if not d.get("isAvailable", True):
+      continue
+    if mode == "booted" and d.get("state") == "Booted":
+      print(d.get("udid", ""))
+      sys.exit(0)
+    if mode == "iphone16" and "iPhone 16" in d.get("name", ""):
+      print(d.get("udid", ""))
+      sys.exit(0)
+    if mode == "iphone" and "iPhone" in d.get("name", ""):
+      print(d.get("udid", ""))
+      sys.exit(0)
+' "$mode" 2>/dev/null || true
 }
 
 # ─── 1. Resolve the simulator UDID ───────────────────────────────────────────
@@ -98,7 +100,7 @@ if [[ "${1:-}" =~ $UDID_RE ]]; then
 else
   # Auto-detect: prefer a currently-booted device.
   SIMULATOR_UDID=$(xcrun simctl list devices booted --json 2>/dev/null \
-    | simctl_udid booted)
+    | simctl_udid booted) || SIMULATOR_UDID=""
 
   if [ -z "$SIMULATOR_UDID" ]; then
     # No booted simulator.  When running as a pre-push hook skip gracefully
@@ -115,11 +117,11 @@ else
     # Not a hook invocation — try to find and boot an iPhone 16.
     echo "⚠️   No booted simulator found. Looking for an available iPhone 16…"
     SIMULATOR_UDID=$(xcrun simctl list devices available --json 2>/dev/null \
-      | simctl_udid iphone16)
+      | simctl_udid iphone16) || SIMULATOR_UDID=""
 
     if [ -z "$SIMULATOR_UDID" ]; then
       SIMULATOR_UDID=$(xcrun simctl list devices available --json 2>/dev/null \
-        | simctl_udid iphone)
+        | simctl_udid iphone) || SIMULATOR_UDID=""
     fi
 
     if [ -z "$SIMULATOR_UDID" ]; then
