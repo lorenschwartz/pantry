@@ -109,7 +109,7 @@ class SampleDataService {
             ShoppingListItem(name: "Sourdough Bread", quantity: 1, unit: "loaf",   estimatedPrice: 4.50, priority: 2, category: grains),
             ShoppingListItem(name: "Butter",       quantity: 1, unit: "lb",        estimatedPrice: 4.49, priority: 1, category: dairy),
             ShoppingListItem(name: "Black Pepper", quantity: 1, unit: "jar",       estimatedPrice: 3.49, priority: 1, category: spices),
-            ShoppingListItem(name: "Eggs",         quantity: 12, unit: "count",    estimatedPrice: 5.99, priority: 1, category: proteins,  isChecked: true),
+            ShoppingListItem(name: "Eggs",         quantity: 12, unit: "count",    isChecked: true, estimatedPrice: 5.99, priority: 1, category: proteins),
         ]
         shoppingItems.forEach { context.insert($0) }
         count += shoppingItems.count

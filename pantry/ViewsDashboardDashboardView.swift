@@ -16,19 +16,9 @@ struct DashboardView: View {
     @Query private var pantryItems: [PantryItem]
     @Query(sort: \ShoppingListItem.priority, order: .reverse) private var shoppingItems: [ShoppingListItem]
     @Query private var recipes: [Recipe]
+    @State private var showMoreMenu = false
 
     // MARK: Derived data
-
-    private var urgentItems: [PantryItem] {
-        pantryItems.filter {
-            guard let d = $0.daysUntilExpiration else { return false }
-            return d <= 1 && !$0.isExpired && !$0.isArchived
-        }
-    }
-
-    private var expiredItems: [PantryItem] {
-        pantryItems.filter { $0.isExpired && !$0.isArchived }
-    }
 
     private var expiringSoonItems: [PantryItem] {
         pantryItems
@@ -53,18 +43,19 @@ struct DashboardView: View {
                     DashboardGreetingView(itemCount: pantryItems.filter { !$0.isArchived }.count)
                         .padding(.horizontal)
 
-                    // ── Urgent alert strip ────────────────────────────────
-                    if !urgentItems.isEmpty || !expiredItems.isEmpty {
-                        DashboardAlertStrip(urgent: urgentItems, expired: expiredItems)
-                            .padding(.horizontal)
-                    }
-
                     // ── Stats row ─────────────────────────────────────────
                     DashboardStatsRow(
                         totalItems: pantryItems.filter { !$0.isArchived }.count,
                         expiringSoon: expiringSoonItems.count,
                         shoppingPending: pendingShoppingItems.count,
                         lowStock: lowStockItems.count
+                    )
+                    .padding(.horizontal)
+
+                    // ── AI Assistant ──────────────────────────────────────
+                    DashboardAISection(
+                        pantryItems: pantryItems,
+                        recipes: recipes
                     )
                     .padding(.horizontal)
 
@@ -86,20 +77,16 @@ struct DashboardView: View {
                         }
                     }
 
-                    // ── AI Assistant ──────────────────────────────────────
-                    DashboardAISection(
-                        pantryItems: pantryItems,
-                        recipes: recipes
-                    )
-                    .padding(.horizontal)
-
                     // ── Quick actions ─────────────────────────────────────
                     DashboardQuickActions()
                         .padding(.horizontal)
 
                     // ── Shopping list preview ─────────────────────────────
                     if !pendingShoppingItems.isEmpty {
-                        DashboardSectionHeader(title: "Shopping List", destination: AnyView(ShoppingListView()))
+                        DashboardSectionHeader(
+                            title: "Shopping List",
+                            destination: AnyView(ShoppingListView(showAddItem: .constant(false)))
+                        )
                             .padding(.horizontal)
 
                         VStack(spacing: 0) {
@@ -120,8 +107,24 @@ struct DashboardView: View {
                 .padding(.top, 8)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Dashboard")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true)
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    showMoreMenu = true
+                } label: {
+                    Image(systemName: "gear")
+                        .font(.system(size: 20))
+                        .padding(12)
+                        .background(Color(.systemBackground))
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+                }
+                .padding(.top, 8)
+                .padding(.trailing, 16)
+            }
+            .sheet(isPresented: $showMoreMenu) {
+                MoreMenuView()
+            }
         }
     }
 }
@@ -152,61 +155,6 @@ private struct DashboardGreetingView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-    }
-}
-
-// MARK: - Alert strip
-
-private struct DashboardAlertStrip: View {
-    let urgent: [PantryItem]
-    let expired: [PantryItem]
-
-    var body: some View {
-        VStack(spacing: 8) {
-            if !expired.isEmpty {
-                AlertBanner(
-                    icon: "exclamationmark.triangle.fill",
-                    color: .red,
-                    message: expired.count == 1
-                        ? "\(expired[0].name) has expired."
-                        : "\(expired.count) items have expired."
-                )
-            }
-            ForEach(urgent) { item in
-                AlertBanner(
-                    icon: "clock.badge.exclamationmark",
-                    color: .orange,
-                    message: item.daysUntilExpiration == 0
-                        ? "\(item.name) expires today."
-                        : "\(item.name) expires tomorrow."
-                )
-            }
-        }
-    }
-}
-
-private struct AlertBanner: View {
-    let icon: String
-    let color: Color
-    let message: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(color.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(color.opacity(0.3), lineWidth: 1)
-        )
     }
 }
 
@@ -330,9 +278,12 @@ private struct ExpiringItemCard: View {
 // MARK: - AI Assistant section
 
 struct DashboardAISection: View {
+    @Environment(\.modelContext) private var modelContext
+
     let pantryItems: [PantryItem]
     let recipes: [Recipe]
 
+    @State private var service = LLMService()
     @State private var query = ""
     @State private var response: String? = nil
     @State private var isLoading = false
@@ -344,6 +295,10 @@ struct DashboardAISection: View {
         "Help me plan the week",
     ]
 
+    private var chipColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 150), spacing: 8)]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -352,23 +307,30 @@ struct DashboardAISection: View {
                     .foregroundStyle(.purple)
                 Text("Ask Your Pantry")
                     .font(.headline)
+                Spacer()
+                NavigationLink(destination: ChatView()) {
+                    Label("Open Assistant", systemImage: "arrow.right.circle")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+                }
             }
 
-            // Prompt chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(promptChips, id: \.self) { chip in
-                        Button {
-                            query = chip
-                        } label: {
-                            Text(chip)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.purple)
+            // Prompt chips (wrapping grid, no horizontal scrolling)
+            LazyVGrid(columns: chipColumns, alignment: .leading, spacing: 8) {
+                ForEach(promptChips, id: \.self) { chip in
+                    Button {
+                        query = chip
+                    } label: {
+                        Text(chip)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                     }
+                    .buttonStyle(.bordered)
+                    .tint(.purple)
                 }
             }
 
@@ -403,14 +365,27 @@ struct DashboardAISection: View {
 
             // Response area
             if let response {
-                Text(response)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.purple.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(response)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 220)
+                .background(Color.purple.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+
+                HStack {
+                    Spacer()
+                    NavigationLink(destination: ChatView()) {
+                        Label("Continue in Assistant", systemImage: "arrow.right.circle")
+                            .font(.caption)
+                            .foregroundStyle(.purple)
+                    }
+                }
             }
         }
         .padding(14)
@@ -436,18 +411,19 @@ struct DashboardAISection: View {
         isLoading = true
         response = nil
 
-        // TODO: Replace this stub with your LLM service call, e.g.:
-        //   Task {
-        //       response = await PantryAIService.ask(trimmed, pantryItems: pantryItems, recipes: recipes)
-        //       isLoading = false
-        //       query = ""
-        //   }
-        //
-        // The LLM service should receive `pantryItems` and `recipes` as context
-        // so it can answer questions about what's in stock, expiring soon, etc.
+        Task {
+            // Dashboard asks are intentionally one-shot and concise for speed.
+            service.clearConversation()
+            let dashboardPrompt = """
+            \(trimmed)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            response = "LLM not yet connected — wire up your service in DashboardAISection.sendQuery()."
+            Keep your answer concise (max 120 words) and practical.
+            """
+
+            await service.sendMessage(dashboardPrompt, context: modelContext)
+            response = service.chatMessages.last(where: { $0.role == .assistant })?.content
+                ?? "No response from assistant."
+            query = ""
             isLoading = false
         }
     }
@@ -465,10 +441,10 @@ private struct DashboardQuickActions: View {
                 NavigationLink(destination: RecipeSuggestionsView()) {
                     QuickActionTile(icon: "fork.knife", label: "What can\nI make?", color: .orange)
                 }
-                NavigationLink(destination: PantryListView()) {
+                NavigationLink(destination: PantryListView(showAddItem: .constant(false))) {
                     QuickActionTile(icon: "cabinet", label: "Browse\nPantry", color: .blue)
                 }
-                NavigationLink(destination: ShoppingListView()) {
+                NavigationLink(destination: ShoppingListView(showAddItem: .constant(false))) {
                     QuickActionTile(icon: "cart.badge.plus", label: "Shopping\nList", color: .green)
                 }
             }

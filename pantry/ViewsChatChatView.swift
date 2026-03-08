@@ -23,33 +23,30 @@ struct ChatView: View {
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if service.hasAPIKey {
-                    chatInterface
-                } else {
-                    APIKeySetupView(service: service)
-                }
-            }
-            .navigationTitle("Pantry Assistant")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarItems }
-            .sheet(isPresented: $showAPIKeySheet) {
+        VStack(spacing: 0) {
+            if service.hasAPIKey {
+                chatInterface
+            } else {
                 APIKeySetupView(service: service)
-                    .presentationDetents([.medium])
             }
+        }
+        .navigationTitle("Pantry Assistant")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarItems }
+        .sheet(isPresented: $showAPIKeySheet) {
+            APIKeySetupView(service: service)
+                .presentationDetents([.medium])
         }
     }
 
     // MARK: - Chat Interface
 
-    @ViewBuilder
     private var chatInterface: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if service.chatMessages.isEmpty {
-                        WelcomeMessageView()
+                        WelcomeMessageView(onSelect: sendSuggestion)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 48)
                     }
@@ -64,6 +61,20 @@ struct ChatView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    Divider()
+                    ChatInputBar(
+                        text: $inputText,
+                        isLoading: service.isLoading,
+                        isFocused: _isInputFocused,
+                        onSend: sendMessage
+                    )
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+                }
+            }
             .onChange(of: service.chatMessages.count) {
                 withAnimation(.easeOut(duration: 0.25)) {
                     proxy.scrollTo("bottom", anchor: .bottom)
@@ -75,18 +86,6 @@ struct ChatView: View {
                 }
             }
         }
-
-        Divider()
-
-        ChatInputBar(
-            text: $inputText,
-            isLoading: service.isLoading,
-            isFocused: _isInputFocused,
-            onSend: sendMessage
-        )
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 
     // MARK: - Toolbar
@@ -124,6 +123,11 @@ struct ChatView: View {
         Task {
             await service.sendMessage(text, context: modelContext)
         }
+    }
+
+    private func sendSuggestion(_ text: String) {
+        inputText = text
+        sendMessage()
     }
 }
 
@@ -247,6 +251,15 @@ struct ChatInputBar: View {
 // MARK: - Welcome Message
 
 struct WelcomeMessageView: View {
+    let onSelect: (String) -> Void
+
+    private let suggestions = [
+        "What can I make for dinner tonight?",
+        "Add 2 lbs of chicken to my pantry",
+        "What's expiring soon?",
+        "Create a recipe for pasta carbonara"
+    ]
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "fork.knife.circle.fill")
@@ -264,10 +277,11 @@ struct WelcomeMessageView: View {
             }
 
             VStack(spacing: 10) {
-                SuggestionChip(text: "What can I make for dinner tonight?")
-                SuggestionChip(text: "Add 2 lbs of chicken to my pantry")
-                SuggestionChip(text: "What's expiring soon?")
-                SuggestionChip(text: "Create a recipe for pasta carbonara")
+                ForEach(suggestions, id: \.self) { suggestion in
+                    SuggestionChip(text: suggestion) {
+                        onSelect(suggestion)
+                    }
+                }
             }
         }
         .padding()
@@ -278,15 +292,18 @@ struct WelcomeMessageView: View {
 
 struct SuggestionChip: View {
     let text: String
+    let action: () -> Void
 
     var body: some View {
-        Text(text)
-            .font(.subheadline)
-            .foregroundStyle(.tint)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Color.accentColor.opacity(0.1))
-            .clipShape(Capsule())
+        Button(action: action) {
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.tint)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.accentColor.opacity(0.1))
+                .clipShape(Capsule())
+        }
     }
 }
 
