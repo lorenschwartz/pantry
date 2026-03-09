@@ -11,6 +11,8 @@ import SwiftData
 struct RecipeSuggestionsView: View {
     @Environment(\.modelContext) private var modelContext
     
+    var focusPantryItem: PantryItem? = nil
+
     @Query private var recipes: [Recipe]
     @Query private var pantryItems: [PantryItem]
     
@@ -29,8 +31,15 @@ struct RecipeSuggestionsView: View {
     }
     
     private var recipeSuggestions: [(recipe: Recipe, matchPercentage: Double, missingIngredients: [RecipeIngredient])] {
+        let candidateRecipes: [Recipe]
+        if let focusPantryItem {
+            candidateRecipes = RecipePantryService.recipesUsingPantryItem(focusPantryItem, in: recipes)
+        } else {
+            candidateRecipes = recipes
+        }
+
         let results = RecipePantryService.makeableRecipes(
-            recipes: recipes,
+            recipes: candidateRecipes,
             pantryItems: pantryItems
         )
         
@@ -61,12 +70,19 @@ struct RecipeSuggestionsView: View {
             expiringItems: expiringItems
         )
     }
+
+    private var navigationTitleText: String {
+        if let focusPantryItem {
+            return "Recipes with \(focusPantryItem.name)"
+        }
+        return "What Can I Make?"
+    }
     
     var body: some View {
         NavigationStack {
             List {
                 // Expiring Items Section
-                if !expiringRecipeSuggestions.isEmpty {
+                if focusPantryItem == nil, !expiringRecipeSuggestions.isEmpty {
                     Section {
                         ForEach(expiringRecipeSuggestions.prefix(5), id: \.recipe.id) { suggestion in
                             NavigationLink(destination: RecipeDetailView(recipe: suggestion.recipe)) {
@@ -114,7 +130,7 @@ struct RecipeSuggestionsView: View {
                     }
                 }
             }
-            .navigationTitle("What Can I Make?")
+            .navigationTitle(navigationTitleText)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

@@ -19,15 +19,9 @@ struct ItemDetailView: View {
     @State private var showRecipeSuggestions = false
     
     @Query private var recipes: [Recipe]
-    @Query private var pantryItems: [PantryItem]
     
     private var recipesUsingThisItem: [Recipe] {
-        recipes.filter { recipe in
-            recipe.ingredients?.contains { ingredient in
-                ingredient.name.localizedCaseInsensitiveContains(item.name) ||
-                item.name.localizedCaseInsensitiveContains(ingredient.name)
-            } ?? false
-        }
+        RecipePantryService.recipesUsingPantryItem(item, in: recipes)
     }
     
     var body: some View {
@@ -287,9 +281,7 @@ struct ItemDetailView: View {
         }
         .sheet(isPresented: $showRecipeSuggestions) {
             NavigationStack {
-                RecipeSuggestionsView()
-                    .navigationTitle("Recipe Suggestions")
-                    .navigationBarTitleDisplayMode(.inline)
+                RecipeSuggestionsView(focusPantryItem: item)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Done") {

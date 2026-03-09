@@ -96,7 +96,8 @@ struct PantryListView: View {
                 }
             }
         }
-        .padding()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(Color(.secondarySystemBackground))
     }
 
@@ -175,9 +176,12 @@ struct PantryListView: View {
                                 }
                                 .tint(.blue)
                             }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
                         }
                     }
                     .listStyle(.plain)
+                    .contentMargins(.horizontal, 0, for: .scrollContent)
+                    .contentMargins(.top, 0, for: .scrollContent)
                 }
             }
             // Pin the summary bar above the scrollable content without wrapping
@@ -189,6 +193,7 @@ struct PantryListView: View {
                 searchBar
             }
             .navigationTitle("Pantry")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {

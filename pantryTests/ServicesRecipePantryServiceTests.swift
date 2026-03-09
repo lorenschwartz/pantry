@@ -140,6 +140,70 @@ struct IsIngredientAvailableTests {
     }
 }
 
+// MARK: - pantry-item-driven recipe matching (Find Recipes)
+
+struct PantryItemRecipeMatchingTests {
+
+    @Test func recipeUsesPantryItemDirectMatch_returnsTrueForAlmondPluralization() throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+
+        let pantryItem = PantryItem(name: "almonds", quantity: 1, unit: "bag")
+        let recipe = Recipe(name: "Almond Cookies", prepTime: 10, cookTime: 12)
+        let ingredient = RecipeIngredient(name: "almond flour", quantity: 2, unit: "cup")
+
+        context.insert(pantryItem)
+        context.insert(recipe)
+        context.insert(ingredient)
+        ingredient.recipe = recipe
+
+        #expect(RecipePantryService.recipeUsesPantryItemDirectMatch(recipe: recipe, pantryItem: pantryItem))
+    }
+
+    @Test func recipeUsesPantryItemDirectMatch_returnsFalseForUnrelatedIngredientName() throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+
+        let pantryItem = PantryItem(name: "almonds", quantity: 1, unit: "bag")
+        let recipe = Recipe(name: "Baked Salmon", prepTime: 10, cookTime: 15)
+        let ingredient = RecipeIngredient(name: "salmon fillet", quantity: 1, unit: "lb")
+
+        context.insert(pantryItem)
+        context.insert(recipe)
+        context.insert(ingredient)
+        ingredient.recipe = recipe
+
+        #expect(!RecipePantryService.recipeUsesPantryItemDirectMatch(recipe: recipe, pantryItem: pantryItem))
+    }
+
+    @Test func recipesUsingPantryItem_returnsOnlyDirectMatches() throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+
+        let pantryItem = PantryItem(name: "almonds", quantity: 1, unit: "bag")
+
+        let matchingRecipe = Recipe(name: "Granola", prepTime: 5, cookTime: 20)
+        let matchingIngredient = RecipeIngredient(name: "sliced almond", quantity: 0.5, unit: "cup")
+
+        let unrelatedRecipe = Recipe(name: "Herb Salmon", prepTime: 10, cookTime: 18)
+        let unrelatedIngredient = RecipeIngredient(name: "salmon", quantity: 1, unit: "lb")
+
+        context.insert(pantryItem)
+        context.insert(matchingRecipe)
+        context.insert(matchingIngredient)
+        context.insert(unrelatedRecipe)
+        context.insert(unrelatedIngredient)
+
+        matchingIngredient.recipe = matchingRecipe
+        unrelatedIngredient.recipe = unrelatedRecipe
+
+        let results = RecipePantryService.recipesUsingPantryItem(pantryItem, in: [matchingRecipe, unrelatedRecipe])
+
+        #expect(results.count == 1)
+        #expect(results[0].id == matchingRecipe.id)
+    }
+}
+
 // MARK: - findMatchingPantryItem (no container needed)
 
 struct FindMatchingPantryItemTests {
