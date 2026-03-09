@@ -8,6 +8,36 @@ import Testing
 
 struct CopilotPolicyServiceTests {
 
+    @Test func shouldPromptForSensitivities_returnsTrueForMealPlanningWithoutKnownSensitivities() {
+        #expect(
+            CopilotPolicyService.shouldPromptForSensitivities(
+                intent: .mealPlanning,
+                knownSensitivities: [],
+                isCookingForGuests: false
+            )
+        )
+    }
+
+    @Test func shouldPromptForSensitivities_returnsFalseWhenSensitivitiesAreKnown() {
+        #expect(
+            !CopilotPolicyService.shouldPromptForSensitivities(
+                intent: .recipeSuggestions,
+                knownSensitivities: [.dairy],
+                isCookingForGuests: false
+            )
+        )
+    }
+
+    @Test func shouldPromptForSensitivities_returnsTrueWhenCookingForGuests() {
+        #expect(
+            CopilotPolicyService.shouldPromptForSensitivities(
+                intent: .guestCooking,
+                knownSensitivities: [.dairy],
+                isCookingForGuests: true
+            )
+        )
+    }
+
     @Test func evaluate_allowsReadOnlyTool() {
         let decision = CopilotPolicyService.evaluate(
             toolName: "get_pantry_items",
@@ -40,4 +70,3 @@ struct CopilotPolicyServiceTests {
         #expect(decision == .allow)
     }
 }
-

@@ -11,6 +11,9 @@ import SwiftData
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var assistantSession: AssistantSessionStore
+    @AppStorage(MealPlanSensitivitySettings.householdKey) private var householdSensitivityCSV = ""
+    @AppStorage(MealPlanSensitivitySettings.guestKey) private var guestSensitivityCSV = ""
+    @AppStorage(MealPlanSensitivitySettings.customTagsKey) private var customSensitivityTagsCSV = ""
 
     @Query private var pantryItems: [PantryItem]
     @Query(sort: \ShoppingListItem.priority, order: .reverse) private var shoppingItems: [ShoppingListItem]
@@ -43,6 +46,18 @@ struct DashboardView: View {
 
     private var activeMealPlan: MealPlan? {
         mealPlans.first(where: { $0.includes(Date()) })
+    }
+
+    private var householdSensitivities: [FoodSensitivity] {
+        MealPlanSensitivitySettings.decodeSensitivityCSV(householdSensitivityCSV)
+    }
+
+    private var guestSensitivities: [FoodSensitivity] {
+        MealPlanSensitivitySettings.decodeSensitivityCSV(guestSensitivityCSV)
+    }
+
+    private var customSensitivityTags: [String] {
+        MealPlanSensitivitySettings.decodeCustomTags(customSensitivityTagsCSV)
     }
 
     private var suggestedTopRecipe: (recipe: Recipe, matchPercentage: Double, missingIngredients: [RecipeIngredient])? {
@@ -333,6 +348,9 @@ struct DashboardView: View {
                 startDate: Date(),
                 days: 7,
                 mealTypes: [.dinner],
+                householdSensitivities: householdSensitivities,
+                guestSensitivities: guestSensitivities,
+                customSensitivityTags: customSensitivityTags,
                 prioritizeExpiring: prioritizeExpiring,
                 desiredServings: 2
             )
@@ -352,6 +370,9 @@ struct DashboardView: View {
             startDate: start,
             days: 7,
             mealTypes: [.dinner],
+            householdSensitivities: householdSensitivities,
+            guestSensitivities: guestSensitivities,
+            customSensitivityTags: customSensitivityTags,
             prioritizeExpiring: prioritizeExpiring,
             desiredServings: 2
         )

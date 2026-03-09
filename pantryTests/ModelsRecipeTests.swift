@@ -88,4 +88,5 @@ struct RecipeTests {
         recipe.markAsCooked()
         #expect(recipe.modifiedDate >= before)
     }
+
 }

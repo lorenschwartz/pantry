@@ -7,6 +7,9 @@ import SwiftUI
 
 struct MealPlanComposerView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(MealPlanSensitivitySettings.householdKey) private var householdSensitivityCSV = ""
+    @AppStorage(MealPlanSensitivitySettings.guestKey) private var guestSensitivityCSV = ""
+    @AppStorage(MealPlanSensitivitySettings.customTagsKey) private var customSensitivityTagsCSV = ""
 
     @State private var days = 7
     @State private var includeBreakfast = false
@@ -19,6 +22,18 @@ struct MealPlanComposerView: View {
     @State private var desiredServings = 2
 
     let onGenerate: (MealPlanRequest) -> Void
+
+    private var householdSensitivities: [FoodSensitivity] {
+        MealPlanSensitivitySettings.decodeSensitivityCSV(householdSensitivityCSV)
+    }
+
+    private var guestSensitivities: [FoodSensitivity] {
+        MealPlanSensitivitySettings.decodeSensitivityCSV(guestSensitivityCSV)
+    }
+
+    private var customSensitivityTags: [String] {
+        MealPlanSensitivitySettings.decodeCustomTags(customSensitivityTagsCSV)
+    }
 
     var body: some View {
         NavigationStack {
@@ -56,6 +71,9 @@ struct MealPlanComposerView: View {
                             days: days,
                             mealTypes: selectedMealTypes,
                             maxPrepMinutes: maxPrepEnabled ? maxPrepMinutes : nil,
+                            householdSensitivities: householdSensitivities,
+                            guestSensitivities: guestSensitivities,
+                            customSensitivityTags: customSensitivityTags,
                             prioritizeExpiring: prioritizeExpiring,
                             desiredServings: desiredServings
                         )
@@ -77,4 +95,3 @@ struct MealPlanComposerView: View {
         return values
     }
 }
-

@@ -14,6 +14,9 @@ struct SettingsView: View {
     @Query private var locations: [StorageLocation]
     @Query private var pantryItems: [PantryItem]
     private let keychainService = KeychainService()
+    @AppStorage(MealPlanSensitivitySettings.householdKey) private var householdSensitivityCSV = ""
+    @AppStorage(MealPlanSensitivitySettings.guestKey) private var guestSensitivityCSV = ""
+    @AppStorage(MealPlanSensitivitySettings.customTagsKey) private var customSensitivityTagsCSV = ""
 
     @State private var showLoadConfirmation = false
     @State private var showClearConfirmation = false
@@ -60,6 +63,43 @@ struct SettingsView: View {
                     Text("Assistant")
                 } footer: {
                     Text("Your Anthropic API key is stored locally in Keychain and used by the Assistant.")
+                }
+
+                Section {
+                    Text("Household")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(FoodSensitivity.allCases, id: \.rawValue) { sensitivity in
+                        Toggle(
+                            sensitivity.displayName,
+                            isOn: sensitivityBinding(sensitivity, csv: $householdSensitivityCSV)
+                        )
+                    }
+
+                    Text("Guests")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 6)
+
+                    ForEach(FoodSensitivity.allCases, id: \.rawValue) { sensitivity in
+                        Toggle(
+                            sensitivity.displayName,
+                            isOn: sensitivityBinding(sensitivity, csv: $guestSensitivityCSV)
+                        )
+                    }
+
+                    TextField(
+                        "Custom blocked tags (comma-separated)",
+                        text: $customSensitivityTagsCSV,
+                        axis: .vertical
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                } header: {
+                    Text("Meal Planning Sensitivities")
+                } footer: {
+                    Text("These filters are applied when generating meal plans from Home and Meal Plan screens.")
                 }
 
                 Section("Inventory") {
@@ -197,6 +237,25 @@ struct SettingsView: View {
         apiKeyInput = ""
         statusMessage = "Assistant API key removed."
         clearStatusAfterDelay()
+    }
+
+    private func sensitivityBinding(_ sensitivity: FoodSensitivity, csv: Binding<String>) -> Binding<Bool> {
+        Binding(
+            get: {
+                MealPlanSensitivitySettings.decodeSensitivityCSV(csv.wrappedValue).contains(sensitivity)
+            },
+            set: { isEnabled in
+                var selected = MealPlanSensitivitySettings.decodeSensitivityCSV(csv.wrappedValue)
+                if isEnabled {
+                    if !selected.contains(sensitivity) {
+                        selected.append(sensitivity)
+                    }
+                } else {
+                    selected.removeAll(where: { $0 == sensitivity })
+                }
+                csv.wrappedValue = MealPlanSensitivitySettings.encodeSensitivityCSV(selected)
+            }
+        )
     }
 }
 
