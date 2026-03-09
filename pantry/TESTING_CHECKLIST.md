@@ -259,6 +259,40 @@ Use this checklist to verify all recipe features are working correctly.
 
 ---
 
+## ✅ Meal Plan (AI-Forward)
+
+### Navigation and Entry
+- [ ] Open `More` menu and verify `Meal Plan` is present
+- [ ] `Meal Plans` screen loads without errors
+- [ ] Empty state appears when no plans exist
+- [ ] `Create This Week` creates a plan and opens detail
+
+### Generate My Week
+- [ ] `Generate My Week` opens composer sheet
+- [ ] Can configure days, meal types, servings
+- [ ] Can enable/disable prep-time constraint
+- [ ] Can enable/disable expiring-item prioritization
+- [ ] Generate button disabled when no meal types selected
+- [ ] Generate creates entries for requested range/meal types
+
+### Explainability and Confidence
+- [ ] Each generated entry shows meal type and recipe
+- [ ] Each entry shows confidence percentage
+- [ ] Each entry shows pantry coverage badge
+- [ ] Rationale text appears for generated entries
+
+### Plan Actions
+- [ ] Swipe action marks meal as `Cooked`
+- [ ] Swipe action marks meal as `Skipped`
+- [ ] Status badge updates immediately
+
+### Shopping List Integration
+- [ ] `Shopping List` action creates missing ingredients
+- [ ] Duplicate missing ingredients merge into one item
+- [ ] Servings override scales shopping quantities correctly
+
+---
+
 ## ✅ Recipe Suggestions
 
 ### Display

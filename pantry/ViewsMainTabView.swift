@@ -158,6 +158,7 @@ struct MoreMenuView: View {
 
     enum MenuItem: String, CaseIterable, Identifiable {
         case dashboard = "Dashboard"
+        case mealPlan = "Meal Plan"
         case recipes = "Recipes"
         case assistant = "Assistant"
         case insights = "Insights"
@@ -169,6 +170,8 @@ struct MoreMenuView: View {
             switch self {
             case .dashboard:
                 return "house"
+            case .mealPlan:
+                return "calendar.badge.clock"
             case .recipes:
                 return "book"
             case .assistant:
@@ -218,6 +221,8 @@ struct MoreMenuView: View {
                 switch item {
                 case .dashboard:
                     DashboardView()
+                case .mealPlan:
+                    MealPlanListView()
                 case .recipes:
                     RecipesListView(showAddRecipe: .constant(false))
                 case .assistant:
@@ -239,6 +244,8 @@ struct MoreMenuView: View {
             ShoppingListItem.self, Recipe.self, RecipeIngredient.self,
             RecipeInstruction.self, RecipeCategory.self, RecipeTag.self,
             RecipeCookingNote.self, RecipeCollection.self,
-            Receipt.self, ReceiptItem.self, BarcodeMapping.self
+            Receipt.self, ReceiptItem.self, BarcodeMapping.self,
+            MealPlan.self, MealPlanEntry.self, MealPlanConstraintProfile.self,
+            MealPlanGeneration.self, MealPlanEntryReason.self, MealPlanFeedback.self
         ], inMemory: true)
 }

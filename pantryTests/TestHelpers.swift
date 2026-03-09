@@ -16,7 +16,9 @@ func makeTestContainer() throws -> ModelContainer {
         ShoppingListItem.self, Receipt.self, ReceiptItem.self,
         BarcodeMapping.self, Recipe.self, RecipeIngredient.self,
         RecipeInstruction.self, RecipeCategory.self, RecipeTag.self,
-        RecipeCookingNote.self, RecipeCollection.self
+        RecipeCookingNote.self, RecipeCollection.self,
+        MealPlan.self, MealPlanEntry.self, MealPlanConstraintProfile.self,
+        MealPlanGeneration.self, MealPlanEntryReason.self, MealPlanFeedback.self
     ])
     return try ModelContainer(
         for: schema,

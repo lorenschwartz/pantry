@@ -25,7 +25,13 @@ struct PantryApp: App {
             RecipeCategory.self,
             RecipeTag.self,
             RecipeCookingNote.self,
-            RecipeCollection.self
+            RecipeCollection.self,
+            MealPlan.self,
+            MealPlanEntry.self,
+            MealPlanConstraintProfile.self,
+            MealPlanGeneration.self,
+            MealPlanEntryReason.self,
+            MealPlanFeedback.self
         ])
         // Use an in-memory store when the app is launched by the UI-test runner.
         // This guarantees a clean, isolated data set for every test run and prevents
