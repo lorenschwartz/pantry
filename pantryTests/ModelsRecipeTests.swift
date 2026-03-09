@@ -89,4 +89,88 @@ struct RecipeTests {
         #expect(recipe.modifiedDate >= before)
     }
 
+    // MARK: - rating
+
+    @Test func rating_defaultsToNilForNewRecipe() {
+        let recipe = Recipe(name: "New Recipe")
+        #expect(recipe.rating == nil)
+    }
+
+    @Test func rating_canBeAssignedAHalfStepValue() {
+        let recipe = Recipe(name: "Recipe", rating: 4.5)
+        #expect(recipe.rating == 4.5)
+    }
+
+    @Test func rating_canBeAssignedMinimumValue() {
+        let recipe = Recipe(name: "Recipe", rating: 1.0)
+        #expect(recipe.rating == 1.0)
+    }
+
+    @Test func rating_canBeAssignedMaximumValue() {
+        let recipe = Recipe(name: "Recipe", rating: 5.0)
+        #expect(recipe.rating == 5.0)
+    }
+
+    @Test func rating_canBeClearedBySettingToNil() {
+        let recipe = Recipe(name: "Recipe", rating: 3.5)
+        recipe.rating = nil
+        #expect(recipe.rating == nil)
+    }
+
+    // MARK: - sort by rating
+
+    @Test func sortByRating_placesHigherRatingsFirst() {
+        let low  = Recipe(name: "Low",  rating: 2.0)
+        let high = Recipe(name: "High", rating: 4.5)
+        let mid  = Recipe(name: "Mid",  rating: 3.0)
+
+        let sorted = [low, high, mid].sorted { lhs, rhs in
+            switch (lhs.rating, rhs.rating) {
+            case let (l?, r?): return l > r
+            case (nil, _?):    return false
+            case (_?, nil):    return true
+            case (nil, nil):   return false
+            }
+        }
+
+        #expect(sorted[0].name == "High")
+        #expect(sorted[1].name == "Mid")
+        #expect(sorted[2].name == "Low")
+    }
+
+    @Test func sortByRating_placesUnratedRecipesLast() {
+        let unrated = Recipe(name: "Unrated")
+        let rated   = Recipe(name: "Rated", rating: 3.0)
+
+        let sorted = [unrated, rated].sorted { lhs, rhs in
+            switch (lhs.rating, rhs.rating) {
+            case let (l?, r?): return l > r
+            case (nil, _?):    return false
+            case (_?, nil):    return true
+            case (nil, nil):   return false
+            }
+        }
+
+        #expect(sorted[0].name == "Rated")
+        #expect(sorted[1].name == "Unrated")
+    }
+
+    @Test func sortByRating_twoUnratedRecipesAreStable() {
+        let a = Recipe(name: "A")
+        let b = Recipe(name: "B")
+
+        let sorted = [a, b].sorted { lhs, rhs in
+            switch (lhs.rating, rhs.rating) {
+            case let (l?, r?): return l > r
+            case (nil, _?):    return false
+            case (_?, nil):    return true
+            case (nil, nil):   return false
+            }
+        }
+
+        // Both unrated: relative order is preserved (stable partition)
+        #expect(sorted.count == 2)
+        #expect(sorted[0].rating == nil)
+        #expect(sorted[1].rating == nil)
+    }
 }
