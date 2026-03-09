@@ -36,6 +36,9 @@ struct RecipeDetailView: View {
                 // Quick Info Cards
                 quickInfoSection
                 
+                // Personal Rating
+                ratingSection
+                
                 // Description
                 if let description = recipe.recipeDescription, !description.isEmpty {
                     descriptionSection(description)
@@ -292,13 +295,7 @@ struct RecipeDetailView: View {
             ForEach(notes.sorted(by: { $0.createdDate > $1.createdDate })) { note in
                 VStack(alignment: .leading, spacing: 4) {
                     if let rating = note.rating {
-                        HStack(spacing: 2) {
-                            ForEach(0..<5) { index in
-                                Image(systemName: index < Int(rating) ? "star.fill" : "star")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
+                        StarRatingView(rating: rating)
                     }
                     
                     Text(note.note)
@@ -324,6 +321,45 @@ struct RecipeDetailView: View {
         }
     }
     
+    private var ratingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("My Rating")
+                .font(.headline)
+
+            HStack(spacing: 12) {
+                StarRatingPicker(rating: Binding(
+                    get: { recipe.rating },
+                    set: {
+                        recipe.rating = $0
+                        recipe.modifiedDate = Date()
+                    }
+                ))
+
+                if let rating = recipe.rating {
+                    Text(String(format: "%.1f", rating))
+                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+                        .fontWeight(.semibold)
+                } else {
+                    Text("Tap stars to rate")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if recipe.rating != nil {
+                    Button("Clear") {
+                        recipe.rating = nil
+                        recipe.modifiedDate = Date()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Statistics")
@@ -524,6 +560,82 @@ struct InstructionRow: View {
             }
             
             Spacer()
+        }
+    }
+}
+
+// MARK: - Star Rating View (read-only)
+
+/// Renders 1–5 stars reflecting `rating`, including half-star support.
+struct StarRatingView: View {
+    let rating: Double
+    var maxRating: Int = 5
+    var font: Font = .caption
+    var color: Color = .orange
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(1...maxRating, id: \.self) { index in
+                let isFull = Double(index) <= rating
+                let isHalf = !isFull && Double(index) - 0.5 <= rating
+                Image(systemName: isFull ? "star.fill" : (isHalf ? "star.leadinghalf.filled" : "star"))
+                    .font(font)
+                    .foregroundStyle(color)
+            }
+        }
+    }
+}
+
+// MARK: - Star Rating Picker (interactive)
+
+/// Tap the left half of a star to assign a half-star value,
+/// or the right half to assign a full-star value.
+/// Tapping the currently selected value clears the rating.
+struct StarRatingPicker: View {
+    @Binding var rating: Double?
+    var maxRating: Int = 5
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(1...maxRating, id: \.self) { star in
+                starControl(for: star)
+            }
+        }
+    }
+
+    private func starControl(for star: Int) -> some View {
+        let currentRating = rating ?? 0
+        let isFull = Double(star) <= currentRating
+        let isHalf = !isFull && Double(star) - 0.5 <= currentRating
+
+        return HStack(spacing: 0) {
+            // Left touch zone → half-star value (clamped to 1.0 minimum per spec)
+            Color.clear
+                .frame(width: 22, height: 44)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Minimum rating is 1.0; clamp so the left half of star 1 maps to 1.0 not 0.5
+                    let halfVal = max(1.0, Double(star) - 0.5)
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        rating = (rating == halfVal) ? nil : halfVal
+                    }
+                }
+            // Right touch zone → full-star value
+            Color.clear
+                .frame(width: 22, height: 44)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    let fullVal = Double(star)
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        rating = (rating == fullVal) ? nil : fullVal
+                    }
+                }
+        }
+        .overlay {
+            Image(systemName: isFull ? "star.fill" : (isHalf ? "star.leadinghalf.filled" : "star"))
+                .font(.title)
+                .foregroundStyle(isFull || isHalf ? .orange : Color(.systemGray4))
+                .allowsHitTesting(false)
         }
     }
 }

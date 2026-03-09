@@ -22,6 +22,7 @@ struct AddEditRecipeView: View {
     @State private var servings = 4
     @State private var difficulty = RecipeDifficulty.medium
     @State private var isFavorite = false
+    @State private var rating: Double? = nil
     @State private var notes = ""
     @State private var sourceURL = ""
     
@@ -49,6 +50,7 @@ struct AddEditRecipeView: View {
             _servings = State(initialValue: recipe.servings)
             _difficulty = State(initialValue: recipe.difficulty)
             _isFavorite = State(initialValue: recipe.isFavorite)
+            _rating = State(initialValue: recipe.rating)
             _notes = State(initialValue: recipe.notes ?? "")
             _sourceURL = State(initialValue: recipe.sourceURL ?? "")
             _selectedImageData = State(initialValue: recipe.imageData)
@@ -240,6 +242,35 @@ struct AddEditRecipeView: View {
                     
                     Toggle("Favorite", isOn: $isFavorite)
                 }
+                
+                // Personal Rating Section
+                Section("Personal Rating") {
+                    HStack(spacing: 12) {
+                        StarRatingPicker(rating: $rating)
+
+                        if let r = rating {
+                            Text(String(format: "%.1f", r))
+                                .font(.subheadline)
+                                .foregroundStyle(.orange)
+                                .fontWeight(.semibold)
+                        } else {
+                            Text("Not rated")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+
+                    if rating != nil {
+                        Button(role: .destructive) {
+                            rating = nil
+                        } label: {
+                            Label("Clear Rating", systemImage: "xmark.circle")
+                        }
+                    }
+                }
             }
             .navigationTitle(isEditing ? "Edit Recipe" : "New Recipe")
             .navigationBarTitleDisplayMode(.inline)
@@ -286,6 +317,7 @@ struct AddEditRecipeView: View {
             recipe.servings = servings
             recipe.difficulty = difficulty
             recipe.isFavorite = isFavorite
+            recipe.rating = rating
             recipe.notes = notes.isEmpty ? nil : notes
             recipe.sourceURL = sourceURL.isEmpty ? nil : sourceURL
             recipe.imageData = selectedImageData
@@ -337,6 +369,7 @@ struct AddEditRecipeView: View {
                 cookTime: cookTime,
                 servings: servings,
                 difficulty: difficulty,
+                rating: rating,
                 isFavorite: isFavorite,
                 notes: notes.isEmpty ? nil : notes,
                 sourceURL: sourceURL.isEmpty ? nil : sourceURL
