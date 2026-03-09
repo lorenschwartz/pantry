@@ -91,6 +91,17 @@ class RecipePantryService {
 
         return false
     }
+
+    /// Deterministic safety filter used before any ranking/AI enhancement.
+    /// Returns true when a recipe does not intersect with active sensitivity keys.
+    static func isRecipeSensitivitySafe(
+        recipe: Recipe,
+        activeSensitivityKeys: Set<String>
+    ) -> Bool {
+        guard !activeSensitivityKeys.isEmpty else { return true }
+        let recipeKeys = Set((recipe.tags ?? []).map { $0.name.lowercased() })
+        return recipeKeys.isDisjoint(with: activeSensitivityKeys)
+    }
     
     /// Check if a specific ingredient is available in pantry
     static func isIngredientAvailable(

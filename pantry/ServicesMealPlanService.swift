@@ -11,8 +11,25 @@ struct MealPlanRequest {
     var mealTypes: [MealType]
     var maxPrepMinutes: Int?
     var dietaryTags: [String]
+    var householdSensitivities: [FoodSensitivity]
+    var guestSensitivities: [FoodSensitivity]
+    var customSensitivityTags: [String]
     var prioritizeExpiring: Bool
     var desiredServings: Int?
+
+    var activeSensitivityKeys: [String] {
+        let predefined = Set(
+            (householdSensitivities + guestSensitivities)
+                .map(\.rawValue)
+                .map { $0.lowercased() }
+        )
+        let custom = Set(
+            customSensitivityTags
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }
+        )
+        return Array(predefined.union(custom))
+    }
 
     init(
         startDate: Date,
@@ -20,6 +37,9 @@ struct MealPlanRequest {
         mealTypes: [MealType] = [.dinner],
         maxPrepMinutes: Int? = nil,
         dietaryTags: [String] = [],
+        householdSensitivities: [FoodSensitivity] = [],
+        guestSensitivities: [FoodSensitivity] = [],
+        customSensitivityTags: [String] = [],
         prioritizeExpiring: Bool = true,
         desiredServings: Int? = nil
     ) {
@@ -28,6 +48,9 @@ struct MealPlanRequest {
         self.mealTypes = mealTypes
         self.maxPrepMinutes = maxPrepMinutes
         self.dietaryTags = dietaryTags
+        self.householdSensitivities = householdSensitivities
+        self.guestSensitivities = guestSensitivities
+        self.customSensitivityTags = customSensitivityTags
         self.prioritizeExpiring = prioritizeExpiring
         self.desiredServings = desiredServings
     }
@@ -53,6 +76,7 @@ enum MealPlanService {
     ) -> [MealPlanDraftEntry] {
         let calendar = Calendar.current
         let expiring = pantryItems.filter { $0.isExpired || $0.isExpiringSoon }
+        let activeSensitivityKeys = Set(request.activeSensitivityKeys)
         let filtered = recipes.filter { recipe in
             guard let maxPrep = request.maxPrepMinutes else { return true }
             return recipe.prepTime <= maxPrep
@@ -62,6 +86,11 @@ enum MealPlanService {
             return request.dietaryTags.allSatisfy { desired in
                 tagNames.contains(desired.lowercased())
             }
+        }.filter { recipe in
+            RecipePantryService.isRecipeSensitivitySafe(
+                recipe: recipe,
+                activeSensitivityKeys: activeSensitivityKeys
+            )
         }
 
         typealias RankedRecipe = (
@@ -87,6 +116,9 @@ enum MealPlanService {
         }
 
         if ranked.isEmpty {
+            if !activeSensitivityKeys.isEmpty {
+                return []
+            }
             ranked = recipes.map { recipe in
                 let result = RecipePantryService.checkRecipeMakeable(recipe: recipe, pantryItems: pantryItems)
                 return (recipe, result.matchPercentage / 100.0, result.matchPercentage / 100.0, result.missingIngredients, 0)

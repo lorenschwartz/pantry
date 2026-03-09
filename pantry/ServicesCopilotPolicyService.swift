@@ -13,6 +13,13 @@ enum CopilotPolicyDecision: Equatable {
     case deny
 }
 
+enum CopilotSensitivityIntent {
+    case mealPlanning
+    case recipeSuggestions
+    case guestCooking
+    case shoppingGeneration
+}
+
 enum CopilotPolicyService {
 
     /// Evaluates whether a validated tool call can execute immediately.
@@ -45,5 +52,21 @@ enum CopilotPolicyService {
         ]
         return blockedPhrases.contains { text.contains($0) }
     }
-}
 
+    /// Determines whether copilot should explicitly ask for sensitivity/allergen
+    /// constraints before producing meal, recipe, or shopping recommendations.
+    static func shouldPromptForSensitivities(
+        intent: CopilotSensitivityIntent,
+        knownSensitivities: [FoodSensitivity],
+        isCookingForGuests: Bool
+    ) -> Bool {
+        if isCookingForGuests { return true }
+
+        switch intent {
+        case .mealPlanning, .recipeSuggestions, .shoppingGeneration:
+            return knownSensitivities.isEmpty
+        case .guestCooking:
+            return true
+        }
+    }
+}

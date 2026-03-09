@@ -10,6 +10,30 @@ import SwiftData
 
 struct MealPlanServiceTests {
 
+    @Test func generateDraft_excludesRecipesViolatingActiveSensitivities() {
+        let peanutRecipe = Recipe(name: "Peanut Noodles", prepTime: 10, cookTime: 10, servings: 2)
+        peanutRecipe.tags = [RecipeTag(name: "peanut", colorHex: "#B45309")]
+
+        let safeRecipe = Recipe(name: "Tomato Pasta", prepTime: 10, cookTime: 10, servings: 2)
+        safeRecipe.tags = [RecipeTag(name: "vegetarian", colorHex: "#059669")]
+
+        let request = MealPlanRequest(
+            startDate: Date(),
+            days: 1,
+            mealTypes: [.dinner],
+            householdSensitivities: [.peanut]
+        )
+
+        let entries = MealPlanService.generateDraft(
+            request: request,
+            recipes: [peanutRecipe, safeRecipe],
+            pantryItems: []
+        )
+
+        #expect(entries.count == 1)
+        #expect(entries.first?.recipe?.name == "Tomato Pasta")
+    }
+
     @Test func generateDraft_prioritizesRecipesUsingExpiringItems() throws {
         let container = try makeTestContainer()
         let context = ModelContext(container)
@@ -114,4 +138,3 @@ struct MealPlanServiceTests {
         #expect(shopping[0].quantity == 3)
     }
 }
-

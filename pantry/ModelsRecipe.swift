@@ -9,6 +9,18 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+enum FoodSensitivity: String, Codable, CaseIterable {
+    case dairy = "dairy"
+    case egg = "egg"
+    case peanut = "peanut"
+    case treeNut = "tree_nut"
+    case soy = "soy"
+    case wheat = "wheat"
+    case fish = "fish"
+    case shellfish = "shellfish"
+    case sesame = "sesame"
+}
+
 @Model
 final class Recipe {
     var id: UUID
@@ -60,7 +72,7 @@ final class Recipe {
     var stepCount: Int {
         instructions?.count ?? 0
     }
-    
+
     init(
         id: UUID = UUID(),
         name: String,
