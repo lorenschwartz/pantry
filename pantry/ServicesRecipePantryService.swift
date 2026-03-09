@@ -50,6 +50,47 @@ class RecipePantryService {
         
         return (matchPercentage, missing, available)
     }
+
+    /// Returns recipes that directly use a pantry item (for pantry-item-driven
+    /// "Find Recipes" flows). This intentionally avoids fuzzy substring matching.
+    static func recipesUsingPantryItem(
+        _ pantryItem: PantryItem,
+        in recipes: [Recipe]
+    ) -> [Recipe] {
+        recipes.filter { recipeUsesPantryItemDirectMatch(recipe: $0, pantryItem: pantryItem) }
+    }
+
+    /// True when a recipe has at least one ingredient that directly matches the
+    /// given pantry item by ID, normalized full-name equality, or token equality.
+    static func recipeUsesPantryItemDirectMatch(
+        recipe: Recipe,
+        pantryItem: PantryItem
+    ) -> Bool {
+        guard let ingredients = recipe.ingredients, !ingredients.isEmpty else {
+            return false
+        }
+
+        let pantryTokens = normalizedIngredientTokens(from: pantryItem.name)
+        let pantryCanonical = canonicalIngredientName(from: pantryItem.name)
+
+        for ingredient in ingredients {
+            if ingredient.pantryItemID == pantryItem.id {
+                return true
+            }
+
+            let ingredientCanonical = canonicalIngredientName(from: ingredient.name)
+            if ingredientCanonical == pantryCanonical {
+                return true
+            }
+
+            let ingredientTokens = normalizedIngredientTokens(from: ingredient.name)
+            if !pantryTokens.isDisjoint(with: ingredientTokens) {
+                return true
+            }
+        }
+
+        return false
+    }
     
     /// Check if a specific ingredient is available in pantry
     static func isIngredientAvailable(
@@ -316,5 +357,45 @@ class RecipePantryService {
         }
         
         return []
+    }
+
+    // MARK: - Direct match normalization
+
+    /// Canonicalized ingredient name used for direct-equality checks.
+    private static func canonicalIngredientName(from raw: String) -> String {
+        normalizedIngredientTokens(from: raw).sorted().joined(separator: " ")
+    }
+
+    /// Tokenizes and lightly singularizes ingredient names while filtering out
+    /// short/common descriptor words so direct matching is deterministic.
+    private static func normalizedIngredientTokens(from raw: String) -> Set<String> {
+        let separators = CharacterSet.alphanumerics.inverted
+        let stopWords: Set<String> = [
+            "fresh", "organic", "large", "small", "medium", "raw", "dried",
+            "chopped", "minced", "ground", "unsalted", "salted", "whole",
+            "extra", "virgin", "optional"
+        ]
+
+        return Set(
+            raw.lowercased()
+                .components(separatedBy: separators)
+                .map { singularizedToken($0) }
+                .filter { $0.count >= 3 && !stopWords.contains($0) }
+        )
+    }
+
+    /// Very small heuristic for plural nouns used by pantry/ingredient matching.
+    private static func singularizedToken(_ token: String) -> String {
+        guard token.count > 3 else { return token }
+        if token.hasSuffix("ies") {
+            return String(token.dropLast(3)) + "y"
+        }
+        if token.hasSuffix("es") {
+            return String(token.dropLast(2))
+        }
+        if token.hasSuffix("s") {
+            return String(token.dropLast())
+        }
+        return token
     }
 }

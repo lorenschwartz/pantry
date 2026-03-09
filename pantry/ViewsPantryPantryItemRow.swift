@@ -74,7 +74,7 @@ struct PantryItemRow: View {
                         Text("·")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
-                        Label(location.name, systemImage: location.iconName)
+                        Image(systemName: location.iconName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

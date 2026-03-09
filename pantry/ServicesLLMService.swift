@@ -189,7 +189,7 @@ enum LLMError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "No API key configured. Please add your Anthropic API key in Assistant settings."
+            return "No API key configured. Please add your Anthropic API key in Home > Settings."
         case .invalidAPIKey:
             return "Invalid API key. Please check your Anthropic API key."
         case .rateLimited:

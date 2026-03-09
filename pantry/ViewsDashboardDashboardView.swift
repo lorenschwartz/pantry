@@ -18,7 +18,7 @@ struct DashboardView: View {
     @Query(sort: \MealPlan.startDate, order: .reverse) private var mealPlans: [MealPlan]
     @Query(sort: \Category.sortOrder) private var categories: [Category]
 
-    @State private var showMoreMenu = false
+    @State private var showSettings = false
     @State private var dismissedProposalIDs = Set<String>()
     @State private var pendingConfirmation: CopilotProposal?
     @State private var actionStatusMessage: String?
@@ -54,6 +54,13 @@ struct DashboardView: View {
     private var restockCandidates: [PantryItem] {
         let namesOnShoppingList = Set(pendingShoppingItems.map { $0.name.lowercased() })
         return lowStockItems.filter { !namesOnShoppingList.contains($0.name.lowercased()) }
+    }
+
+    private var insightItemsByCategory: [(Category, Int)] {
+        categories.compactMap { category in
+            let count = activePantryItems.filter { $0.category?.id == category.id }.count
+            return count > 0 ? (category, count) : nil
+        }.sorted { $0.1 > $1.1 }
     }
 
     private var briefingHeadline: String {
@@ -149,6 +156,21 @@ struct DashboardView: View {
                     )
                     .padding(.horizontal)
 
+                    DashboardSectionHeader(title: "Insights") {
+                        InsightsView()
+                    }
+                    .padding(.horizontal)
+
+                    DashboardInsightsSnapshotCard(
+                        totalValue: activePantryItems.compactMap(\.price).reduce(0, +),
+                        expiredCount: activePantryItems.filter(\.isExpired).count,
+                        expiringSoonCount: expiringSoonItems.count,
+                        lowStockCount: lowStockItems.count,
+                        topCategoryName: insightItemsByCategory.first?.0.name,
+                        topCategoryCount: insightItemsByCategory.first?.1
+                    )
+                    .padding(.horizontal)
+
                     if !proposals.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Copilot Proposals")
@@ -215,7 +237,7 @@ struct DashboardView: View {
             .navigationBarHidden(true)
             .overlay(alignment: .topTrailing) {
                 Button {
-                    showMoreMenu = true
+                    showSettings = true
                 } label: {
                     Image(systemName: "gear")
                         .font(.system(size: 20))
@@ -227,8 +249,8 @@ struct DashboardView: View {
                 .padding(.top, 8)
                 .padding(.trailing, 16)
             }
-            .sheet(isPresented: $showMoreMenu) {
-                MoreMenuView(assistantSession: assistantSession)
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
             }
             .confirmationDialog(
                 pendingConfirmation?.title ?? "Approve Copilot Action",
@@ -426,6 +448,73 @@ private struct DashboardStatsRow: View {
             StatPill(value: "\(shoppingPending)", label: "Shopping", icon: "cart", color: .green)
             StatPill(value: "\(lowStock)", label: "Low Stock", icon: "arrow.down.circle", color: .red)
         }
+    }
+}
+
+private struct DashboardInsightsSnapshotCard: View {
+    let totalValue: Double
+    let expiredCount: Int
+    let expiringSoonCount: Int
+    let lowStockCount: Int
+    let topCategoryName: String?
+    let topCategoryCount: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Snapshot")
+                .font(.headline)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Inventory Value")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "$%.2f", totalValue))
+                        .font(.title3.bold())
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Top Category")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(topCategoryLabel)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 10) {
+                insightCountPill(title: "Expired", count: expiredCount, color: .red)
+                insightCountPill(title: "Expiring", count: expiringSoonCount, color: .orange)
+                insightCountPill(title: "Low Stock", count: lowStockCount, color: .yellow)
+            }
+        }
+        .padding(14)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var topCategoryLabel: String {
+        guard let name = topCategoryName, let count = topCategoryCount else {
+            return "None"
+        }
+        return "\(name) (\(count))"
+    }
+
+    private func insightCountPill(title: String, count: Int, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text("\(count)")
+                .font(.headline)
+                .foregroundStyle(color)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(Color(.tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

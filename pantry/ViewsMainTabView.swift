@@ -12,7 +12,7 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var showAddItem = false
     @State private var showAddShoppingItem = false
-    @State private var showMoreMenu = false
+    @State private var showSettings = false
     @State private var assistantSession = AssistantSessionStore()
 
     var body: some View {
@@ -26,15 +26,15 @@ struct MainTabView: View {
                 DashboardView(assistantSession: assistantSession)
             case 2:
                 PantryListView(showAddItem: $showAddItem)
-                    .withGearIcon(showMoreMenu: $showMoreMenu)
+                    .withGearIcon(showSettings: $showSettings)
             case 3:
                 ShoppingListView(showAddItem: $showAddShoppingItem)
-                    .withGearIcon(showMoreMenu: $showMoreMenu)
+                    .withGearIcon(showSettings: $showSettings)
             case 4:
                 NavigationStack {
                     MealPlanListView()
                 }
-                    .withGearIcon(showMoreMenu: $showMoreMenu)
+                    .withGearIcon(showSettings: $showSettings)
             default:
                 EmptyView()
             }
@@ -44,8 +44,8 @@ struct MainTabView: View {
             CustomTabBar(selectedTab: $selectedTab)
         }
         .ignoresSafeArea(.keyboard)
-        .sheet(isPresented: $showMoreMenu) {
-            MoreMenuView(assistantSession: assistantSession)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 }
@@ -106,105 +106,14 @@ struct TabBarButton: View {
 }
 
 extension View {
-    func withGearIcon(showMoreMenu: Binding<Bool>) -> some View {
+    func withGearIcon(showSettings: Binding<Bool>) -> some View {
         self.toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    showMoreMenu.wrappedValue = true
+                    showSettings.wrappedValue = true
                 } label: {
                     Image(systemName: "gear")
                         .font(.system(size: 20))
-                }
-            }
-        }
-    }
-}
-
-struct MoreMenuView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedMenuItem: MenuItem?
-    let assistantSession: AssistantSessionStore
-
-    enum MenuItem: String, CaseIterable, Identifiable {
-        case dashboard = "Dashboard"
-        case receipts = "Receipts"
-        case mealPlan = "Meal Plan"
-        case recipes = "Recipes"
-        case assistant = "Assistant"
-        case insights = "Insights"
-        case settings = "Settings"
-
-        var id: String { rawValue }
-
-        var icon: String {
-            switch self {
-            case .dashboard:
-                return "house"
-            case .receipts:
-                return "doc.text"
-            case .mealPlan:
-                return "calendar.badge.clock"
-            case .recipes:
-                return "book"
-            case .assistant:
-                return "sparkles"
-            case .insights:
-                return "chart.bar"
-            case .settings:
-                return "gear"
-            }
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(MenuItem.allCases) { item in
-                    Button {
-                        selectedMenuItem = item
-                    } label: {
-                        HStack {
-                            Image(systemName: item.icon)
-                                .font(.title3)
-                                .foregroundColor(.accentColor)
-                                .frame(width: 32)
-                            Text(item.rawValue)
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-            .navigationTitle("More")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-            .navigationDestination(item: $selectedMenuItem) { item in
-                switch item {
-                case .dashboard:
-                    DashboardView(assistantSession: assistantSession)
-                case .receipts:
-                    ReceiptsListView(showingSourcePicker: .constant(false))
-                case .mealPlan:
-                    MealPlanListView()
-                case .recipes:
-                    RecipesListView(showAddRecipe: .constant(false))
-                case .assistant:
-                    ChatView(session: assistantSession)
-                case .insights:
-                    InsightsView()
-                case .settings:
-                    SettingsView()
                 }
             }
         }

@@ -13,16 +13,55 @@ struct SettingsView: View {
     @Query private var categories: [Category]
     @Query private var locations: [StorageLocation]
     @Query private var pantryItems: [PantryItem]
+    private let keychainService = KeychainService()
 
     @State private var showLoadConfirmation = false
     @State private var showClearConfirmation = false
     @State private var statusMessage: String?
+    @State private var apiKeyInput = ""
+    @State private var isAPIKeySecure = true
 
     private var hasExistingData: Bool { !pantryItems.isEmpty }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        if isAPIKeySecure {
+                            SecureField("sk-ant-...", text: $apiKeyInput)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        } else {
+                            TextField("sk-ant-...", text: $apiKeyInput)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        }
+
+                        Button {
+                            isAPIKeySecure.toggle()
+                        } label: {
+                            Image(systemName: isAPIKeySecure ? "eye.slash" : "eye")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button("Save API Key") {
+                        saveAssistantAPIKey()
+                    }
+                    .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if !apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button("Remove API Key", role: .destructive) {
+                            removeAssistantAPIKey()
+                        }
+                    }
+                } header: {
+                    Text("Assistant")
+                } footer: {
+                    Text("Your Anthropic API key is stored locally in Keychain and used by the Assistant.")
+                }
+
                 Section("Inventory") {
                     NavigationLink {
                         ManageCategoriesView()
@@ -119,6 +158,9 @@ struct SettingsView: View {
             } message: {
                 Text("This permanently deletes all pantry items, recipes, shopping lists, receipts, categories, and locations. This cannot be undone.")
             }
+            .onAppear {
+                apiKeyInput = keychainService.loadAPIKey()
+            }
         }
     }
 
@@ -140,6 +182,21 @@ struct SettingsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             statusMessage = nil
         }
+    }
+
+    private func saveAssistantAPIKey() {
+        let trimmed = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        keychainService.saveAPIKey(trimmed)
+        apiKeyInput = trimmed
+        statusMessage = "Assistant API key saved."
+        clearStatusAfterDelay()
+    }
+
+    private func removeAssistantAPIKey() {
+        keychainService.saveAPIKey("")
+        apiKeyInput = ""
+        statusMessage = "Assistant API key removed."
+        clearStatusAfterDelay()
     }
 }
 
