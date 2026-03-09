@@ -21,6 +21,7 @@ struct PantryListView: View {
     @State private var selectedLocation: StorageLocation?
     @State private var sortOrder: SortOrder = .name
     @State private var showingFilters = false
+    @State private var hasAppliedUITestSearchSeed = false
     /// Set to a non-nil item when a decrement would bring quantity to zero;
     /// triggers the "Remove from pantry?" confirmation dialog.
     @State private var itemPendingDelete: PantryItem?
@@ -36,12 +37,7 @@ struct PantryListView: View {
         var result = items.filter { !$0.isArchived }
         
         // Search filter
-        if !searchText.isEmpty {
-            result = result.filter { item in
-                item.name.localizedCaseInsensitiveContains(searchText) ||
-                item.brand?.localizedCaseInsensitiveContains(searchText) == true
-            }
-        }
+        result = PantrySearchService.filter(items: result, query: searchText)
         
         // Category filter
         if let selectedCategory {
@@ -104,13 +100,42 @@ struct PantryListView: View {
         .background(Color(.secondarySystemBackground))
     }
 
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search items", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+                .accessibilityLabel("pantry.searchField")
+                .accessibilityIdentifier("pantry.searchField")
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Clear search")
+                .accessibilityIdentifier("pantry.clearSearchButton")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.secondarySystemBackground))
+    }
+
     var body: some View {
         NavigationStack {
             Group {
                 // Item list
                 if filteredItems.isEmpty {
                     ContentUnavailableView(
-                        "No Items",
+                        searchText.isEmpty ? "No Items" : "No Matches",
                         systemImage: "cabinet",
                         description: Text(searchText.isEmpty ? "Add your first pantry item to get started" : "No items match your search")
                     )
@@ -153,13 +178,15 @@ struct PantryListView: View {
                         }
                     }
                     .listStyle(.plain)
-                    .searchable(text: $searchText, prompt: "Search items")
                 }
             }
             // Pin the summary bar above the scrollable content without wrapping
             // the List in a VStack (which breaks scroll gesture routing in iOS 26).
             .safeAreaInset(edge: .top, spacing: 0) {
                 summaryBar
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                searchBar
             }
             .navigationTitle("Pantry")
             .toolbar {
@@ -224,6 +251,7 @@ struct PantryListView: View {
             }
             .onAppear {
                 initializeDefaultData()
+                applyUITestSearchSeedIfNeeded()
             }
         }
     }
@@ -291,6 +319,20 @@ struct PantryListView: View {
         }
 
         try? modelContext.save()
+    }
+
+    private func applyUITestSearchSeedIfNeeded() {
+        guard !hasAppliedUITestSearchSeed else { return }
+        hasAppliedUITestSearchSeed = true
+        guard searchText.isEmpty else { return }
+
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flagIndex = arguments.firstIndex(of: "-UITestPantrySearchQuery"),
+              arguments.indices.contains(flagIndex + 1) else {
+            return
+        }
+
+        searchText = arguments[flagIndex + 1]
     }
 }
 
