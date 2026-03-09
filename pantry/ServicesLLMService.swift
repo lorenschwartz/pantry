@@ -207,11 +207,17 @@ enum LLMError: LocalizedError {
 @Observable
 @MainActor
 final class LLMService {
+    enum ModelProfile: Equatable {
+        case balanced
+        case quality
+        case fast
+    }
 
     // MARK: Public state
 
     var chatMessages: [ChatMessage] = []
     var isLoading = false
+    let modelProfile: ModelProfile
 
     var apiKey: String {
         get { keychainService.loadAPIKey() }
@@ -223,9 +229,33 @@ final class LLMService {
     // MARK: Private state
 
     private var conversationHistory: [[String: Any]] = []
-    private let modelID = "claude-opus-4-6"
-    private let maxTokens = 4096
     private let keychainService = KeychainService()
+
+    var modelID: String {
+        switch modelProfile {
+        case .balanced:
+            return "claude-sonnet-4-5"
+        case .quality:
+            return "claude-opus-4-6"
+        case .fast:
+            return "claude-haiku-4-5"
+        }
+    }
+
+    private var maxTokens: Int {
+        switch modelProfile {
+        case .balanced:
+            return 2048
+        case .quality:
+            return 4096
+        case .fast:
+            return 1024
+        }
+    }
+
+    init(modelProfile: ModelProfile = .balanced) {
+        self.modelProfile = modelProfile
+    }
 
     // MARK: - Public API
 
@@ -252,7 +282,10 @@ final class LLMService {
         } catch {
             let message = (error as? LLMError)?.errorDescription
                 ?? "Error: \(error.localizedDescription)"
-            chatMessages[loadingIndex] = ChatMessage(role: .assistant, content: message)
+            chatMessages[loadingIndex] = ChatMessage(
+                role: .assistant,
+                content: Self.normalizeAssistantResponse(message)
+            )
         }
 
         isLoading = false
@@ -278,7 +311,10 @@ final class LLMService {
                     .filter { ($0["type"] as? String) == "text" }
                     .compactMap { $0["text"] as? String }
                     .joined()
-                chatMessages[loadingIndex] = ChatMessage(role: .assistant, content: text)
+                chatMessages[loadingIndex] = ChatMessage(
+                    role: .assistant,
+                    content: Self.normalizeAssistantResponse(text)
+                )
                 continueLoop = false
 
             case "tool_use":
@@ -705,7 +741,7 @@ final class LLMService {
 
     // MARK: - System Prompt
 
-    private var systemPrompt: String {
+    var systemPrompt: String {
         let date = DateFormatter.localizedString(from: Date(), dateStyle: .long, timeStyle: .none)
         return """
         You are a helpful kitchen and pantry assistant integrated into the Pantry iOS app. \
@@ -728,8 +764,38 @@ final class LLMService {
           then be creative and helpful in your recommendations.
         - For recipe creation, include enough detail so the user can actually cook the dish.
         - Be conversational and friendly, like a knowledgeable sous-chef.
+        - Return plain text only.
+        - Do not use Markdown, code blocks, tables, or heading syntax.
         - Today's date is \(date).
         """
+    }
+
+    static func normalizeAssistantResponse(_ text: String) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        let cleaned = lines.map { line in
+            var value = line.trimmingCharacters(in: .whitespaces)
+            if value.hasPrefix("```") {
+                return ""
+            }
+            if value.hasPrefix("### ") {
+                value = String(value.dropFirst(4))
+            } else if value.hasPrefix("## ") {
+                value = String(value.dropFirst(3))
+            } else if value.hasPrefix("# ") {
+                value = String(value.dropFirst(2))
+            }
+            if value.hasPrefix("- ") {
+                value = String(value.dropFirst(2))
+            } else if value.hasPrefix("* ") {
+                value = String(value.dropFirst(2))
+            }
+            return value
+        }
+
+        return cleaned
+            .joined(separator: "\n")
+            .replacingOccurrences(of: "\n\n\n", with: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Tool Definitions

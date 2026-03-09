@@ -13,16 +13,17 @@ struct MainTabView: View {
     @State private var showAddItem = false
     @State private var showAddShoppingItem = false
     @State private var showMoreMenu = false
+    @State private var assistantSession = AssistantSessionStore()
 
     var body: some View {
         Group {
             switch selectedTab {
             case 0:
                 NavigationStack {
-                    ChatView()
+                    ChatView(session: assistantSession)
                 }
             case 1:
-                DashboardView()
+                DashboardView(assistantSession: assistantSession)
             case 2:
                 PantryListView(showAddItem: $showAddItem)
                     .withGearIcon(showMoreMenu: $showMoreMenu)
@@ -44,7 +45,7 @@ struct MainTabView: View {
         }
         .ignoresSafeArea(.keyboard)
         .sheet(isPresented: $showMoreMenu) {
-            MoreMenuView()
+            MoreMenuView(assistantSession: assistantSession)
         }
     }
 }
@@ -122,6 +123,7 @@ extension View {
 struct MoreMenuView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMenuItem: MenuItem?
+    let assistantSession: AssistantSessionStore
 
     enum MenuItem: String, CaseIterable, Identifiable {
         case dashboard = "Dashboard"
@@ -190,7 +192,7 @@ struct MoreMenuView: View {
             .navigationDestination(item: $selectedMenuItem) { item in
                 switch item {
                 case .dashboard:
-                    DashboardView()
+                    DashboardView(assistantSession: assistantSession)
                 case .receipts:
                     ReceiptsListView(showingSourcePicker: .constant(false))
                 case .mealPlan:
@@ -198,7 +200,7 @@ struct MoreMenuView: View {
                 case .recipes:
                     RecipesListView(showAddRecipe: .constant(false))
                 case .assistant:
-                    ChatView()
+                    ChatView(session: assistantSession)
                 case .insights:
                     InsightsView()
                 case .settings:
