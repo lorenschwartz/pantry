@@ -18,7 +18,7 @@ struct ChatView: View {
     @Query(sort: \ShoppingListItem.addedDate) private var shoppingItems: [ShoppingListItem]
 
     @Bindable var session: AssistantSessionStore
-    @State private var showAPIKeySheet = false
+    @State private var showMissingAPIKeyAlert = false
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
@@ -28,9 +28,10 @@ struct ChatView: View {
         .navigationTitle("Pantry Assistant")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarItems }
-        .sheet(isPresented: $showAPIKeySheet) {
-            APIKeySetupView(service: session.service)
-                .presentationDetents([.medium])
+        .alert("Assistant Setup Required", isPresented: $showMissingAPIKeyAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Configure your Anthropic API key in Home > Settings.")
         }
     }
 
@@ -41,9 +42,7 @@ struct ChatView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if !session.service.hasAPIKey {
-                        MissingAPIKeyBanner {
-                            showAPIKeySheet = true
-                        }
+                        MissingAPIKeyBanner()
                     }
                     if session.service.chatMessages.isEmpty {
                         WelcomeMessageView(onSelect: sendSuggestion)
@@ -95,18 +94,10 @@ struct ChatView: View {
     private var toolbarItems: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
             Menu {
-                Button {
-                    showAPIKeySheet = true
+                Button(role: .destructive) {
+                    session.clearConversation()
                 } label: {
-                    Label("API Key Settings", systemImage: "key")
-                }
-                if session.service.hasAPIKey {
-                    Divider()
-                    Button(role: .destructive) {
-                        session.clearConversation()
-                    } label: {
-                        Label("Clear Chat", systemImage: "trash")
-                    }
+                    Label("Clear Chat", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -120,7 +111,7 @@ struct ChatView: View {
         let text = session.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         guard session.service.hasAPIKey else {
-            showAPIKeySheet = true
+            showMissingAPIKeyAlert = true
             return
         }
         isInputFocused = false
@@ -136,17 +127,13 @@ struct ChatView: View {
 }
 
 private struct MissingAPIKeyBanner: View {
-    let onSetupTap: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Assistant setup required")
                 .font(.headline)
-            Text("Add your Anthropic API key to start chatting.")
+            Text("Add your Anthropic API key in Home > Settings to start chatting.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Button("Set Up API Key", action: onSetupTap)
-                .buttonStyle(.borderedProminent)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -337,76 +324,6 @@ struct SuggestionChip: View {
                 .padding(.vertical, 8)
                 .background(Color.accentColor.opacity(0.1))
                 .clipShape(Capsule())
-        }
-    }
-}
-
-// MARK: - API Key Setup View
-
-struct APIKeySetupView: View {
-    @Bindable var service: LLMService
-    @State private var keyInput = ""
-    @State private var isSecure = true
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    HStack {
-                        if isSecure {
-                            SecureField("sk-ant-...", text: $keyInput)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                        } else {
-                            TextField("sk-ant-...", text: $keyInput)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                        }
-                        Button {
-                            isSecure.toggle()
-                        } label: {
-                            Image(systemName: isSecure ? "eye.slash" : "eye")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } header: {
-                    Text("Anthropic API Key")
-                } footer: {
-                    Text("Your API key is stored locally on this device and never shared. Get a key at console.anthropic.com.")
-                }
-
-                Section {
-                    Button("Save API Key") {
-                        service.apiKey = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                        dismiss()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .disabled(keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-
-                if service.hasAPIKey {
-                    Section {
-                        Button("Remove API Key", role: .destructive) {
-                            service.apiKey = ""
-                            keyInput = ""
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-            }
-            .navigationTitle(service.hasAPIKey ? "API Key Settings" : "Set Up Assistant")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if service.hasAPIKey {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Cancel") { dismiss() }
-                    }
-                }
-            }
-            .onAppear {
-                keyInput = service.apiKey
-            }
         }
     }
 }
