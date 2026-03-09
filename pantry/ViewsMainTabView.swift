@@ -11,24 +11,28 @@ import SwiftData
 struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var showAddItem = false
-    @State private var showAddRecipe = false
     @State private var showAddShoppingItem = false
-    @State private var showAddReceipt = false
     @State private var showMoreMenu = false
 
     var body: some View {
         Group {
             switch selectedTab {
             case 0:
-                DashboardView()
+                NavigationStack {
+                    ChatView()
+                }
             case 1:
+                DashboardView()
+            case 2:
                 PantryListView(showAddItem: $showAddItem)
                     .withGearIcon(showMoreMenu: $showMoreMenu)
-            case 2:
+            case 3:
                 ShoppingListView(showAddItem: $showAddShoppingItem)
                     .withGearIcon(showMoreMenu: $showMoreMenu)
-            case 3:
-                ReceiptsListView(showingSourcePicker: $showAddReceipt)
+            case 4:
+                NavigationStack {
+                    MealPlanListView()
+                }
                     .withGearIcon(showMoreMenu: $showMoreMenu)
             default:
                 EmptyView()
@@ -36,71 +40,34 @@ struct MainTabView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                onAddTapped: handleAddButtonTap
-            )
+            CustomTabBar(selectedTab: $selectedTab)
         }
         .ignoresSafeArea(.keyboard)
         .sheet(isPresented: $showMoreMenu) {
             MoreMenuView()
         }
     }
-
-    private func handleAddButtonTap() {
-        switch selectedTab {
-        case 1:
-            showAddItem = true
-        case 2:
-            showAddShoppingItem = true
-        case 3:
-            showAddReceipt = true
-        default:
-            showAddItem = true
-            break
-        }
-    }
 }
 
 struct CustomTabBar: View {
     @Binding var selectedTab: Int
-    let onAddTapped: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            TabBarButton(icon: "house", label: "Home", isSelected: selectedTab == 0) {
+            TabBarButton(icon: "sparkles", label: "Assistant", isSelected: selectedTab == 0) {
                 selectedTab = 0
             }
-            TabBarButton(icon: "cabinet", label: "Pantry", isSelected: selectedTab == 1) {
+            TabBarButton(icon: "house", label: "Home", isSelected: selectedTab == 1) {
                 selectedTab = 1
             }
-
-            Button(action: onAddTapped) {
-                VStack(spacing: 4) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 56, height: 56)
-                            .shadow(color: .black.opacity(0.16), radius: 6, x: 0, y: 2)
-
-                        Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-
-                    Text("Add Item")
-                        .font(.system(size: 10))
-                        .foregroundColor(.accentColor)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .offset(y: -8)
-
-            TabBarButton(icon: "cart", label: "Shopping", isSelected: selectedTab == 2) {
+            TabBarButton(icon: "cabinet", label: "Pantry", isSelected: selectedTab == 2) {
                 selectedTab = 2
             }
-            TabBarButton(icon: "doc.text", label: "Receipts", isSelected: selectedTab == 3) {
+            TabBarButton(icon: "cart", label: "Shopping", isSelected: selectedTab == 3) {
                 selectedTab = 3
+            }
+            TabBarButton(icon: "calendar.badge.clock", label: "Plans", isSelected: selectedTab == 4) {
+                selectedTab = 4
             }
         }
         .frame(height: 64)
@@ -158,6 +125,7 @@ struct MoreMenuView: View {
 
     enum MenuItem: String, CaseIterable, Identifiable {
         case dashboard = "Dashboard"
+        case receipts = "Receipts"
         case mealPlan = "Meal Plan"
         case recipes = "Recipes"
         case assistant = "Assistant"
@@ -170,6 +138,8 @@ struct MoreMenuView: View {
             switch self {
             case .dashboard:
                 return "house"
+            case .receipts:
+                return "doc.text"
             case .mealPlan:
                 return "calendar.badge.clock"
             case .recipes:
@@ -221,6 +191,8 @@ struct MoreMenuView: View {
                 switch item {
                 case .dashboard:
                     DashboardView()
+                case .receipts:
+                    ReceiptsListView(showingSourcePicker: .constant(false))
                 case .mealPlan:
                     MealPlanListView()
                 case .recipes:

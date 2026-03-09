@@ -251,3 +251,53 @@ Requires UX iteration to avoid clutter.
 11. COP-SEC-006
 12. COP-SEC-012
 
+---
+
+## REC-013: Add Personal Recipe Rating Score
+- Priority: P2
+- Type: Product Feature
+- Problem:
+Users cannot quickly score recipes based on personal experience, which reduces quality of recommendations, meal planning relevance, and recipe sorting.
+- Scope:
+Add a per-recipe personal rating field and UI flow to create, edit, display, and sort/filter by rating.
+- Acceptance Criteria:
+1. Users can set a personal rating score for each recipe (1.0 to 5.0, half-step increments).
+2. Rating is shown in recipe list and recipe detail views.
+3. Users can update or clear the rating from recipe detail and edit flows.
+4. Recipe list supports sorting by rating (highest first).
+5. Existing recipes with no rating remain valid and display an unrated state.
+6. Unit tests cover model constraints and sort behavior.
+- Dependencies:
+None required; can ship independently.
+- Risks:
+UI ambiguity between global/family rating vs personal rating if future shared profiles are introduced.
+
+---
+
+## BUG-014: "Find Recipes" from Pantry Item Returns Unrelated Recipes
+- Priority: P1
+- Type: Bug
+- Problem:
+When a user opens a pantry item (example: almonds) and taps `Find Recipes`, the resulting list includes recipes that do not contain that pantry item.
+- Reproduction:
+1. Open Pantry.
+2. Select an item (for example, `almonds`).
+3. Tap `Find Recipes`.
+4. Observe recipe results include entries without almonds.
+- Expected Behavior:
+`Find Recipes` should only show recipes containing the selected pantry item (or clearly-labeled substitution matches when explicitly enabled).
+- Actual Behavior:
+Unrelated recipes are shown, creating low trust in recipe matching.
+- Suspected Area:
+- `pantry/ViewsPantryItemDetailView.swift` (find-recipes trigger and navigation payload)
+- `pantry/ServicesRecipePantryService.swift` (ingredient matching/filtering logic)
+- Acceptance Criteria:
+1. Result set only includes recipes with a direct ingredient match to the selected pantry item by default.
+2. Fuzzy/contains matching does not include unrelated recipes (false positives reduced to zero for straightforward terms like almonds).
+3. If substitution matches are supported, they are opt-in and clearly labeled.
+4. Add unit tests for positive and negative matching cases (including `almond` vs unrelated ingredient names).
+5. Add an integration-level test (or deterministic service test) covering the pantry-item-driven `Find Recipes` flow.
+- Dependencies:
+None.
+- Risks:
+Over-tightening matching could hide valid recipes with ingredient naming variants unless matching rules are carefully bounded.
