@@ -14,6 +14,8 @@ struct MealPlanDetailView: View {
     @Query(sort: \PantryItem.name) private var pantryItems: [PantryItem]
 
     @State private var showingComposer = false
+    @State private var generationAlertMessage = ""
+    @State private var showingGenerationAlert = false
 
     var body: some View {
         List {
@@ -63,6 +65,11 @@ struct MealPlanDetailView: View {
                 regenerate(using: request)
             }
         }
+        .alert("Meal Plan Generation", isPresented: $showingGenerationAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(generationAlertMessage)
+        }
     }
 
     private var sortedEntries: [MealPlanEntry] {
@@ -84,16 +91,22 @@ struct MealPlanDetailView: View {
     }
 
     private func regenerate(using request: MealPlanRequest) {
-        for existing in mealPlan.entries ?? [] {
-            modelContext.delete(existing)
-        }
-        mealPlan.entries = []
-
         let draft = MealPlanService.generateDraft(
             request: request,
             recipes: recipes,
             pantryItems: pantryItems
         )
+
+        guard !draft.isEmpty else {
+            generationAlertMessage = "No meals matched your current constraints. Add recipes or loosen settings sensitivities/filters."
+            showingGenerationAlert = true
+            return
+        }
+
+        for existing in mealPlan.entries ?? [] {
+            modelContext.delete(existing)
+        }
+        mealPlan.entries = []
 
         for (index, item) in draft.enumerated() {
             let entry = MealPlanEntry(
@@ -118,6 +131,9 @@ struct MealPlanDetailView: View {
 
         mealPlan.modifiedDate = Date()
         try? modelContext.save()
+
+        generationAlertMessage = "Generated \(draft.count) meal(s)."
+        showingGenerationAlert = true
     }
 
     private func createShoppingList() {
@@ -144,4 +160,3 @@ struct MealPlanDetailView: View {
         try? modelContext.save()
     }
 }
-

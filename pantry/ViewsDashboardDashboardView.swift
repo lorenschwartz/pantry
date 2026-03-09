@@ -25,6 +25,8 @@ struct DashboardView: View {
     @State private var dismissedProposalIDs = Set<String>()
     @State private var pendingConfirmation: CopilotProposal?
     @State private var actionStatusMessage: String?
+    @State private var planGenerationAlertMessage = ""
+    @State private var showingPlanGenerationAlert = false
 
     private var activePantryItems: [PantryItem] {
         pantryItems.filter { !$0.isArchived }
@@ -287,6 +289,11 @@ struct DashboardView: View {
             } message: {
                 Text(pendingConfirmation?.detail ?? "")
             }
+            .alert("Meal Plan Generation", isPresented: $showingPlanGenerationAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(planGenerationAlertMessage)
+            }
         }
     }
 
@@ -310,12 +317,26 @@ struct DashboardView: View {
             actionStatusMessage = "Added \(added.count) low-stock item(s) to shopping list."
 
         case .createWeeklyPlan:
-            generateWeeklyPlan(prioritizeExpiring: false)
-            actionStatusMessage = "Created a new weekly dinner plan."
+            let generatedCount = generateWeeklyPlan(prioritizeExpiring: false)
+            if generatedCount > 0 {
+                actionStatusMessage = "Created a new weekly dinner plan (\(generatedCount) meal(s))."
+                planGenerationAlertMessage = "Generated \(generatedCount) meal(s) for this week."
+            } else {
+                actionStatusMessage = "Could not generate a meal plan."
+                planGenerationAlertMessage = "No meals matched current constraints. Recipes: \(recipes.count), Pantry items: \(activePantryItems.count), Active sensitivity filters: \(householdSensitivities.count + guestSensitivities.count + customSensitivityTags.count)."
+            }
+            showingPlanGenerationAlert = true
 
         case .generateWeeklyExpiringPlan:
-            generateWeeklyPlan(prioritizeExpiring: true)
-            actionStatusMessage = "Created a weekly plan prioritizing expiring ingredients."
+            let generatedCount = generateWeeklyPlan(prioritizeExpiring: true)
+            if generatedCount > 0 {
+                actionStatusMessage = "Created a weekly plan prioritizing expiring ingredients (\(generatedCount) meal(s))."
+                planGenerationAlertMessage = "Generated \(generatedCount) meal(s) prioritized for expiring ingredients."
+            } else {
+                actionStatusMessage = "No plan generated from expiring items."
+                planGenerationAlertMessage = "No meals matched current constraints. Recipes: \(recipes.count), Pantry items: \(activePantryItems.count), Active sensitivity filters: \(householdSensitivities.count + guestSensitivities.count + customSensitivityTags.count)."
+            }
+            showingPlanGenerationAlert = true
 
         case .addMissingForRecipe(let recipeID):
             guard let recipe = recipes.first(where: { $0.id == recipeID }) else { return }
@@ -336,14 +357,8 @@ struct DashboardView: View {
         dismissedProposalIDs.insert(proposal.id)
     }
 
-    private func generateWeeklyPlan(prioritizeExpiring: Bool) {
+    private func generateWeeklyPlan(prioritizeExpiring: Bool) -> Int {
         if let plan = activeMealPlan {
-            for existing in plan.entries ?? [] {
-                modelContext.delete(existing)
-            }
-            plan.entries = []
-            plan.modifiedDate = Date()
-
             let request = MealPlanRequest(
                 startDate: Date(),
                 days: 7,
@@ -355,16 +370,23 @@ struct DashboardView: View {
                 desiredServings: 2
             )
             let draft = MealPlanService.generateDraft(request: request, recipes: recipes, pantryItems: activePantryItems)
+            guard !draft.isEmpty else {
+                return 0
+            }
+
+            for existing in plan.entries ?? [] {
+                modelContext.delete(existing)
+            }
+            plan.entries = []
+            plan.modifiedDate = Date()
             insertMealPlanEntries(draft, into: plan)
             try? modelContext.save()
-            return
+            return draft.count
         }
 
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
-        let plan = MealPlan(name: "Copilot Week Plan", startDate: start, endDate: end)
-        modelContext.insert(plan)
 
         let request = MealPlanRequest(
             startDate: start,
@@ -377,8 +399,15 @@ struct DashboardView: View {
             desiredServings: 2
         )
         let draft = MealPlanService.generateDraft(request: request, recipes: recipes, pantryItems: activePantryItems)
+        guard !draft.isEmpty else {
+            return 0
+        }
+
+        let plan = MealPlan(name: "Copilot Week Plan", startDate: start, endDate: end)
+        modelContext.insert(plan)
         insertMealPlanEntries(draft, into: plan)
         try? modelContext.save()
+        return draft.count
     }
 
     private func insertMealPlanEntries(_ draft: [MealPlanDraftEntry], into plan: MealPlan) {
