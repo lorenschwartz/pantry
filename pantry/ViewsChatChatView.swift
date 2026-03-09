@@ -95,6 +95,12 @@ struct ChatView: View {
         ToolbarItem(placement: .navigationBarTrailing) {
             if service.hasAPIKey {
                 Menu {
+                    NavigationLink {
+                        MealPlanListView()
+                    } label: {
+                        Label("Open Meal Plans", systemImage: "calendar.badge.clock")
+                    }
+                    Divider()
                     Button {
                         showAPIKeySheet = true
                     } label: {
@@ -255,9 +261,11 @@ struct WelcomeMessageView: View {
 
     private let suggestions = [
         "What can I make for dinner tonight?",
+        "Build me a 7-day meal plan from my pantry",
         "Add 2 lbs of chicken to my pantry",
         "What's expiring soon?",
-        "Create a recipe for pasta carbonara"
+        "Create a recipe for pasta carbonara",
+        "Generate a shopping list for this week"
     ]
 
     var body: some View {
@@ -269,12 +277,20 @@ struct WelcomeMessageView: View {
             VStack(spacing: 8) {
                 Text("Pantry Assistant")
                     .font(.title2.bold())
-                Text("I can help you manage your pantry, find recipes, and build shopping lists.")
+                Text("I can manage pantry changes, build meal plans, find recipes, and generate shopping lists.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
+
+            NavigationLink {
+                MealPlanListView()
+            } label: {
+                Label("Open Meal Planning", systemImage: "calendar.badge.plus")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.bordered)
 
             VStack(spacing: 10) {
                 ForEach(suggestions, id: \.self) { suggestion in

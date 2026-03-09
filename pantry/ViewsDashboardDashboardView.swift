@@ -2,104 +2,204 @@
 //  DashboardView.swift
 //  pantry
 //
-//  Root landing screen. Replaces the old Insights tab and gives an at-a-glance
-//  summary of the pantry alongside an AI assistant input that the LLM session
-//  can wire up.
+//  AI-first home dashboard with proactive proposal cards.
 //
 
 import SwiftUI
 import SwiftData
 
-// MARK: - Main View
-
 struct DashboardView: View {
+    @Environment(\.modelContext) private var modelContext
+
     @Query private var pantryItems: [PantryItem]
     @Query(sort: \ShoppingListItem.priority, order: .reverse) private var shoppingItems: [ShoppingListItem]
     @Query private var recipes: [Recipe]
-    @State private var showMoreMenu = false
+    @Query(sort: \MealPlan.startDate, order: .reverse) private var mealPlans: [MealPlan]
+    @Query(sort: \Category.sortOrder) private var categories: [Category]
 
-    // MARK: Derived data
+    @State private var showMoreMenu = false
+    @State private var dismissedProposalIDs = Set<String>()
+    @State private var pendingConfirmation: CopilotProposal?
+    @State private var actionStatusMessage: String?
+
+    private var activePantryItems: [PantryItem] {
+        pantryItems.filter { !$0.isArchived }
+    }
 
     private var expiringSoonItems: [PantryItem] {
-        pantryItems
-            .filter { $0.isExpiringSoon && !$0.isExpired && !$0.isArchived }
+        activePantryItems
+            .filter { $0.isExpiringSoon && !$0.isExpired }
             .sorted { ($0.expirationDate ?? .distantFuture) < ($1.expirationDate ?? .distantFuture) }
     }
 
     private var lowStockItems: [PantryItem] {
-        LowStockService.detectLowStockItems(from: pantryItems)
+        LowStockService.detectLowStockItems(from: activePantryItems)
     }
 
     private var pendingShoppingItems: [ShoppingListItem] {
         shoppingItems.filter { !$0.isChecked }
     }
 
+    private var activeMealPlan: MealPlan? {
+        mealPlans.first(where: { $0.includes(Date()) })
+    }
+
+    private var suggestedTopRecipe: (recipe: Recipe, matchPercentage: Double, missingIngredients: [RecipeIngredient])? {
+        RecipePantryService.makeableRecipes(recipes: recipes, pantryItems: activePantryItems)
+            .sorted { $0.matchPercentage > $1.matchPercentage }
+            .first
+    }
+
+    private var restockCandidates: [PantryItem] {
+        let namesOnShoppingList = Set(pendingShoppingItems.map { $0.name.lowercased() })
+        return lowStockItems.filter { !namesOnShoppingList.contains($0.name.lowercased()) }
+    }
+
+    private var briefingHeadline: String {
+        var segments: [String] = []
+        if !expiringSoonItems.isEmpty {
+            segments.append("\(expiringSoonItems.count) expiring soon")
+        }
+        if !restockCandidates.isEmpty {
+            segments.append("\(restockCandidates.count) low-stock to restock")
+        }
+        if activeMealPlan == nil {
+            segments.append("no active weekly plan")
+        }
+        if segments.isEmpty {
+            return "Everything looks stable today. No urgent pantry risks detected."
+        }
+        return "Today: " + segments.joined(separator: " • ")
+    }
+
+    private var proposals: [CopilotProposal] {
+        var generated: [CopilotProposal] = []
+
+        if !restockCandidates.isEmpty {
+            generated.append(
+                CopilotProposal(
+                    id: "restock-low-stock",
+                    title: "Restock low-stock items",
+                    detail: "Add \(restockCandidates.count) low-stock pantry item(s) to shopping list.",
+                    impact: "Creates shopping entries",
+                    requiresConfirmation: false,
+                    action: .restockLowStock
+                )
+            )
+        }
+
+        if activeMealPlan == nil {
+            generated.append(
+                CopilotProposal(
+                    id: "create-weekly-plan",
+                    title: "Generate this week's meal plan",
+                    detail: "Create a 7-day dinner plan using your current pantry and recipe library.",
+                    impact: "Creates a new meal plan",
+                    requiresConfirmation: true,
+                    action: .createWeeklyPlan
+                )
+            )
+        }
+
+        if !expiringSoonItems.isEmpty {
+            generated.append(
+                CopilotProposal(
+                    id: "expiring-item-plan",
+                    title: "Prioritize expiring ingredients",
+                    detail: "Build a weekly plan focused on using expiring items first.",
+                    impact: "Creates/updates meal plan",
+                    requiresConfirmation: true,
+                    action: .generateWeeklyExpiringPlan
+                )
+            )
+        }
+
+        if let top = suggestedTopRecipe, top.matchPercentage < 100, !top.missingIngredients.isEmpty {
+            generated.append(
+                CopilotProposal(
+                    id: "shop-for-top-recipe-\(top.recipe.id.uuidString)",
+                    title: "Complete ingredients for \(top.recipe.name)",
+                    detail: "Add \(top.missingIngredients.count) missing ingredient(s) for tonight's best-match recipe.",
+                    impact: "Adds shopping list items",
+                    requiresConfirmation: false,
+                    action: .addMissingForRecipe(top.recipe.id)
+                )
+            )
+        }
+
+        return generated.filter { !dismissedProposalIDs.contains($0.id) }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-
-                    // ── Greeting ──────────────────────────────────────────
-                    DashboardGreetingView(itemCount: pantryItems.filter { !$0.isArchived }.count)
+                VStack(alignment: .leading, spacing: 18) {
+                    DashboardGreetingView(itemCount: activePantryItems.count)
                         .padding(.horizontal)
 
-                    // ── Stats row ─────────────────────────────────────────
+                    DashboardBriefingBanner(headline: briefingHeadline)
+                        .padding(.horizontal)
+
                     DashboardStatsRow(
-                        totalItems: pantryItems.filter { !$0.isArchived }.count,
+                        totalItems: activePantryItems.count,
                         expiringSoon: expiringSoonItems.count,
                         shoppingPending: pendingShoppingItems.count,
                         lowStock: lowStockItems.count
                     )
                     .padding(.horizontal)
 
-                    // ── AI Assistant ──────────────────────────────────────
-                    DashboardAISection(
-                        pantryItems: pantryItems,
-                        recipes: recipes
-                    )
-                    .padding(.horizontal)
+                    if !proposals.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Copilot Proposals")
+                                .font(.headline)
+                                .padding(.horizontal)
 
-                    // ── Expiring soon ─────────────────────────────────────
-                    if !expiringSoonItems.isEmpty {
-                        DashboardSectionHeader(title: "Use Soon", destination: AnyView(ExpiringItemsView(items: expiringSoonItems)))
-                            .padding(.horizontal)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(expiringSoonItems.prefix(8)) { item in
-                                    NavigationLink(destination: ItemDetailView(item: item)) {
-                                        ExpiringItemCard(item: item)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
+                            ForEach(proposals) { proposal in
+                                CopilotProposalCard(
+                                    proposal: proposal,
+                                    onApprove: { handleApprove(proposal) },
+                                    onDismiss: { dismissedProposalIDs.insert(proposal.id) }
+                                )
+                                .padding(.horizontal)
                             }
-                            .padding(.horizontal)
                         }
                     }
 
-                    // ── Quick actions ─────────────────────────────────────
+                    DashboardAISection(pantryItems: activePantryItems, recipes: recipes)
+                        .padding(.horizontal)
+
+                    if let plan = activeMealPlan {
+                        DashboardSectionHeader(title: "Active Meal Plan") {
+                            MealPlanListView()
+                        }
+                        .padding(.horizontal)
+
+                        ActiveMealPlanCard(mealPlan: plan)
+                            .padding(.horizontal)
+                    }
+
+                    if let top = suggestedTopRecipe {
+                        DashboardSectionHeader(title: "Top Recipe Match") {
+                            RecipeSuggestionsView()
+                        }
+                        .padding(.horizontal)
+
+                        TopRecipeMatchCard(
+                            recipe: top.recipe,
+                            matchPercentage: top.matchPercentage,
+                            missingCount: top.missingIngredients.count
+                        )
+                        .padding(.horizontal)
+                    }
+
                     DashboardQuickActions()
                         .padding(.horizontal)
 
-                    // ── Shopping list preview ─────────────────────────────
-                    if !pendingShoppingItems.isEmpty {
-                        DashboardSectionHeader(
-                            title: "Shopping List",
-                            destination: AnyView(ShoppingListView(showAddItem: .constant(false)))
-                        )
+                    if let actionStatusMessage {
+                        Text(actionStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal)
-
-                        VStack(spacing: 0) {
-                            ForEach(pendingShoppingItems.prefix(4)) { item in
-                                DashboardShoppingRow(item: item)
-                                if item.id != pendingShoppingItems.prefix(4).last?.id {
-                                    Divider().padding(.leading, 16)
-                                }
-                            }
-                        }
-                        .background(Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .padding(.horizontal)
                     }
 
                     Spacer(minLength: 20)
@@ -125,11 +225,137 @@ struct DashboardView: View {
             .sheet(isPresented: $showMoreMenu) {
                 MoreMenuView()
             }
+            .confirmationDialog(
+                pendingConfirmation?.title ?? "Approve Copilot Action",
+                isPresented: Binding(
+                    get: { pendingConfirmation != nil },
+                    set: { if !$0 { pendingConfirmation = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Approve") {
+                    if let proposal = pendingConfirmation {
+                        execute(proposal)
+                    }
+                    pendingConfirmation = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingConfirmation = nil
+                }
+            } message: {
+                Text(pendingConfirmation?.detail ?? "")
+            }
+        }
+    }
+
+    private func handleApprove(_ proposal: CopilotProposal) {
+        if proposal.requiresConfirmation {
+            pendingConfirmation = proposal
+            return
+        }
+        execute(proposal)
+    }
+
+    private func execute(_ proposal: CopilotProposal) {
+        switch proposal.action {
+        case .restockLowStock:
+            let added = LowStockService.addToShoppingList(
+                restockCandidates,
+                existingList: pendingShoppingItems,
+                context: modelContext
+            )
+            try? modelContext.save()
+            actionStatusMessage = "Added \(added.count) low-stock item(s) to shopping list."
+
+        case .createWeeklyPlan:
+            generateWeeklyPlan(prioritizeExpiring: false)
+            actionStatusMessage = "Created a new weekly dinner plan."
+
+        case .generateWeeklyExpiringPlan:
+            generateWeeklyPlan(prioritizeExpiring: true)
+            actionStatusMessage = "Created a weekly plan prioritizing expiring ingredients."
+
+        case .addMissingForRecipe(let recipeID):
+            guard let recipe = recipes.first(where: { $0.id == recipeID }) else { return }
+            let generated = RecipePantryService.generateShoppingList(
+                recipe: recipe,
+                pantryItems: activePantryItems,
+                categories: categories
+            )
+            let existingNames = Set(pendingShoppingItems.map { $0.name.lowercased() })
+            let toInsert = generated.filter { !existingNames.contains($0.name.lowercased()) }
+            for item in toInsert {
+                modelContext.insert(item)
+            }
+            try? modelContext.save()
+            actionStatusMessage = "Added \(toInsert.count) missing ingredient(s) for \(recipe.name)."
+        }
+
+        dismissedProposalIDs.insert(proposal.id)
+    }
+
+    private func generateWeeklyPlan(prioritizeExpiring: Bool) {
+        if let plan = activeMealPlan {
+            for existing in plan.entries ?? [] {
+                modelContext.delete(existing)
+            }
+            plan.entries = []
+            plan.modifiedDate = Date()
+
+            let request = MealPlanRequest(
+                startDate: Date(),
+                days: 7,
+                mealTypes: [.dinner],
+                prioritizeExpiring: prioritizeExpiring,
+                desiredServings: 2
+            )
+            let draft = MealPlanService.generateDraft(request: request, recipes: recipes, pantryItems: activePantryItems)
+            insertMealPlanEntries(draft, into: plan)
+            try? modelContext.save()
+            return
+        }
+
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date())
+        let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+        let plan = MealPlan(name: "Copilot Week Plan", startDate: start, endDate: end)
+        modelContext.insert(plan)
+
+        let request = MealPlanRequest(
+            startDate: start,
+            days: 7,
+            mealTypes: [.dinner],
+            prioritizeExpiring: prioritizeExpiring,
+            desiredServings: 2
+        )
+        let draft = MealPlanService.generateDraft(request: request, recipes: recipes, pantryItems: activePantryItems)
+        insertMealPlanEntries(draft, into: plan)
+        try? modelContext.save()
+    }
+
+    private func insertMealPlanEntries(_ draft: [MealPlanDraftEntry], into plan: MealPlan) {
+        for (index, item) in draft.enumerated() {
+            let entry = MealPlanEntry(
+                date: item.date,
+                mealType: item.mealType,
+                status: .planned,
+                servingsOverride: item.servingsOverride,
+                position: index,
+                confidence: item.confidence,
+                recipe: item.recipe
+            )
+            let reason = MealPlanEntryReason(
+                summary: item.rationale,
+                pantryCoverage: item.pantryCoverage
+            )
+            reason.entry = entry
+            entry.reason = reason
+            entry.mealPlan = plan
+            modelContext.insert(reason)
+            modelContext.insert(entry)
         }
     }
 }
-
-// MARK: - Greeting
 
 private struct DashboardGreetingView: View {
     let itemCount: Int
@@ -151,14 +377,36 @@ private struct DashboardGreetingView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(greeting)
                 .font(.title.bold())
-            Text(dateString)
+            Text("\(dateString) • \(itemCount) active pantry items")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 }
 
-// MARK: - Stats row
+private struct DashboardBriefingBanner: View {
+    let headline: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Copilot Daily Briefing", systemImage: "sparkles.rectangle.stack")
+                .font(.headline)
+            Text(headline)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color.indigo.opacity(0.18), Color.blue.opacity(0.08)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
 
 private struct DashboardStatsRow: View {
     let totalItems: Int
@@ -168,10 +416,10 @@ private struct DashboardStatsRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            StatPill(value: "\(totalItems)", label: "Items",    icon: "cabinet",                   color: .blue)
-            StatPill(value: "\(expiringSoon)", label: "Expiring", icon: "clock",                   color: .orange)
-            StatPill(value: "\(shoppingPending)", label: "Shopping", icon: "cart",                 color: .green)
-            StatPill(value: "\(lowStock)",  label: "Low Stock", icon: "arrow.down.circle",         color: .red)
+            StatPill(value: "\(totalItems)", label: "Items", icon: "cabinet", color: .blue)
+            StatPill(value: "\(expiringSoon)", label: "Expiring", icon: "clock", color: .orange)
+            StatPill(value: "\(shoppingPending)", label: "Shopping", icon: "cart", color: .green)
+            StatPill(value: "\(lowStock)", label: "Low Stock", icon: "arrow.down.circle", color: .red)
         }
     }
 }
@@ -202,15 +450,13 @@ private struct StatPill: View {
     }
 }
 
-// MARK: - Section header
-
-private struct DashboardSectionHeader<Dest: View>: View {
+private struct DashboardSectionHeader<Destination: View>: View {
     let title: String
-    let destination: Dest
+    let destination: Destination
 
-    init(title: String, destination: AnyView) where Dest == AnyView {
+    init(title: String, @ViewBuilder destination: () -> Destination) {
         self.title = title
-        self.destination = destination as! Dest
+        self.destination = destination()
     }
 
     var body: some View {
@@ -227,55 +473,67 @@ private struct DashboardSectionHeader<Dest: View>: View {
     }
 }
 
-// MARK: - Expiring item card
-
-private struct ExpiringItemCard: View {
-    let item: PantryItem
-
-    private var urgency: Color {
-        guard let d = item.daysUntilExpiration else { return .green }
-        if d <= 1 { return .red }
-        if d <= 3 { return .orange }
-        return .yellow
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let cat = item.category {
-                Image(systemName: cat.iconName)
-                    .font(.title2)
-                    .foregroundStyle(cat.color)
-            } else {
-                Image(systemName: "cube.box")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Text(item.name)
-                .font(.subheadline.bold())
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            if let d = item.daysUntilExpiration {
-                Text(d == 0 ? "Today" : d == 1 ? "Tomorrow" : "in \(d)d")
-                    .font(.caption)
-                    .foregroundStyle(urgency)
-            }
-        }
-        .padding(12)
-        .frame(width: 110, height: 110)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(urgency.opacity(0.4), lineWidth: 1)
-        )
-    }
+private enum CopilotProposalAction: Hashable {
+    case restockLowStock
+    case createWeeklyPlan
+    case generateWeeklyExpiringPlan
+    case addMissingForRecipe(UUID)
 }
 
-// MARK: - AI Assistant section
+private struct CopilotProposal: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let detail: String
+    let impact: String
+    let requiresConfirmation: Bool
+    let action: CopilotProposalAction
+}
+
+private struct CopilotProposalCard: View {
+    let proposal: CopilotProposal
+    let onApprove: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(proposal.title)
+                        .font(.headline)
+                    Text(proposal.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if proposal.requiresConfirmation {
+                    Text("Confirm")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundStyle(.orange)
+                        .clipShape(Capsule())
+                }
+            }
+
+            Text("Impact: \(proposal.impact)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button("Dismiss", action: onDismiss)
+                    .buttonStyle(.bordered)
+                    .tint(.secondary)
+                Spacer()
+                Button("Approve", action: onApprove)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
 
 struct DashboardAISection: View {
     @Environment(\.modelContext) private var modelContext
@@ -291,8 +549,8 @@ struct DashboardAISection: View {
     private let promptChips = [
         "What can I make tonight?",
         "What's expiring soon?",
-        "Suggest a healthy meal",
-        "Help me plan the week",
+        "Build me a weeknight meal plan",
+        "How can I reduce grocery waste this week?"
     ]
 
     private var chipColumns: [GridItem] {
@@ -301,26 +559,22 @@ struct DashboardAISection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
-                Text("Ask Your Pantry")
+                    .foregroundStyle(.indigo)
+                Text("Copilot Console")
                     .font(.headline)
                 Spacer()
                 NavigationLink(destination: ChatView()) {
                     Label("Open Assistant", systemImage: "arrow.right.circle")
                         .font(.caption)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(.indigo)
                 }
             }
 
-            // Prompt chips (wrapping grid, no horizontal scrolling)
             LazyVGrid(columns: chipColumns, alignment: .leading, spacing: 8) {
                 ForEach(promptChips, id: \.self) { chip in
-                    Button {
-                        query = chip
-                    } label: {
+                    Button { query = chip } label: {
                         Text(chip)
                             .font(.caption)
                             .lineLimit(1)
@@ -330,11 +584,10 @@ struct DashboardAISection: View {
                             .padding(.vertical, 6)
                     }
                     .buttonStyle(.bordered)
-                    .tint(.purple)
+                    .tint(.indigo)
                 }
             }
 
-            // Input row
             HStack(spacing: 10) {
                 TextField("Ask anything about your pantry…", text: $query, axis: .vertical)
                     .lineLimit(1...3)
@@ -348,22 +601,19 @@ struct DashboardAISection: View {
                 } label: {
                     Group {
                         if isLoading {
-                            ProgressView()
-                                .tint(.white)
+                            ProgressView().tint(.white)
                         } else {
-                            Image(systemName: "arrow.up")
-                                .fontWeight(.bold)
+                            Image(systemName: "arrow.up").fontWeight(.bold)
                         }
                     }
                     .frame(width: 36, height: 36)
-                    .background(query.isEmpty ? Color.secondary : Color.purple)
+                    .background(query.isEmpty ? Color.secondary : Color.indigo)
                     .foregroundStyle(.white)
                     .clipShape(Circle())
                 }
                 .disabled(query.isEmpty || isLoading)
             }
 
-            // Response area
             if let response {
                 ScrollView(.vertical, showsIndicators: true) {
                     Text(response)
@@ -374,24 +624,14 @@ struct DashboardAISection: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 220)
-                .background(Color.purple.opacity(0.08))
+                .background(Color.indigo.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .transition(.opacity.combined(with: .move(edge: .top)))
-
-                HStack {
-                    Spacer()
-                    NavigationLink(destination: ChatView()) {
-                        Label("Continue in Assistant", systemImage: "arrow.right.circle")
-                            .font(.caption)
-                            .foregroundStyle(.purple)
-                    }
-                }
             }
         }
         .padding(14)
         .background(
             LinearGradient(
-                colors: [Color.purple.opacity(0.07), Color.blue.opacity(0.05)],
+                colors: [Color.indigo.opacity(0.09), Color.blue.opacity(0.05)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -399,7 +639,7 @@ struct DashboardAISection: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
         )
         .animation(.easeOut(duration: 0.2), value: response)
     }
@@ -412,7 +652,6 @@ struct DashboardAISection: View {
         response = nil
 
         Task {
-            // Dashboard asks are intentionally one-shot and concise for speed.
             service.clearConversation()
             let dashboardPrompt = """
             \(trimmed)
@@ -429,7 +668,67 @@ struct DashboardAISection: View {
     }
 }
 
-// MARK: - Quick actions
+private struct ActiveMealPlanCard: View {
+    let mealPlan: MealPlan
+
+    private var plannedCount: Int {
+        (mealPlan.entries ?? []).filter { $0.status == .planned }.count
+    }
+
+    private var cookedCount: Int {
+        (mealPlan.entries ?? []).filter { $0.status == .cooked }.count
+    }
+
+    var body: some View {
+        NavigationLink(destination: MealPlanDetailView(mealPlan: mealPlan)) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(mealPlan.name)
+                    .font(.headline)
+                Text("\(plannedCount) planned • \(cookedCount) cooked")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct TopRecipeMatchCard: View {
+    let recipe: Recipe
+    let matchPercentage: Double
+    let missingCount: Int
+
+    var body: some View {
+        NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(recipe.name)
+                        .font(.headline)
+                    Text("\(Int(matchPercentage))% pantry match")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if missingCount > 0 {
+                        Text("\(missingCount) ingredient(s) missing")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Spacer()
+                Image(systemName: "fork.knife")
+                    .font(.title2)
+                    .foregroundStyle(.orange)
+            }
+            .padding(14)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 private struct DashboardQuickActions: View {
     var body: some View {
@@ -438,14 +737,17 @@ private struct DashboardQuickActions: View {
                 .font(.headline)
 
             HStack(spacing: 10) {
+                NavigationLink(destination: ChatView()) {
+                    QuickActionTile(icon: "sparkles", label: "Open\nAssistant", color: .indigo)
+                }
+                NavigationLink(destination: MealPlanListView()) {
+                    QuickActionTile(icon: "calendar", label: "Meal\nPlans", color: .mint)
+                }
                 NavigationLink(destination: RecipeSuggestionsView()) {
-                    QuickActionTile(icon: "fork.knife", label: "What can\nI make?", color: .orange)
+                    QuickActionTile(icon: "fork.knife", label: "Recipe\nMatches", color: .orange)
                 }
-                NavigationLink(destination: PantryListView(showAddItem: .constant(false))) {
-                    QuickActionTile(icon: "cabinet", label: "Browse\nPantry", color: .blue)
-                }
-                NavigationLink(destination: ShoppingListView(showAddItem: .constant(false))) {
-                    QuickActionTile(icon: "cart.badge.plus", label: "Shopping\nList", color: .green)
+                NavigationLink(destination: ReceiptsListView(showingSourcePicker: .constant(false))) {
+                    QuickActionTile(icon: "doc.text.viewfinder", label: "Scan\nReceipt", color: .teal)
                 }
             }
         }
@@ -474,45 +776,12 @@ private struct QuickActionTile: View {
     }
 }
 
-// MARK: - Shopping preview row
-
-private struct DashboardShoppingRow: View {
-    let item: ShoppingListItem
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: item.priority == 2 ? "exclamationmark.circle.fill" : "circle")
-                .foregroundStyle(item.priority == 2 ? .red : .secondary)
-                .font(.body)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .font(.subheadline)
-                Text("\(item.quantity.formatted()) \(item.unit)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if let price = item.estimatedPrice {
-                Text("≈ $\(price, specifier: "%.2f")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-}
-
-// MARK: - Preview
-
 #Preview {
     let container = try! ModelContainer(
         for: PantryItem.self, ShoppingListItem.self, Recipe.self,
         Category.self, StorageLocation.self,
         RecipeIngredient.self, RecipeInstruction.self,
+        MealPlan.self, MealPlanEntry.self, MealPlanEntryReason.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
 

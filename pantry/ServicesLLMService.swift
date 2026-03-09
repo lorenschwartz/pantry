@@ -338,7 +338,7 @@ final class LLMService {
 
         switch name {
         case "get_pantry_items":
-            return LLMToolFormatter.pantryItemsJSON(fetchPantryItems(context: context))
+            return LLMContextSerializer.pantryItemsSummaryJSON(fetchPantryItems(context: context))
 
         case "add_pantry_item":
             return addPantryItem(input: input, context: context)
@@ -350,7 +350,7 @@ final class LLMService {
             return removePantryItem(input: input, context: context)
 
         case "get_recipes":
-            return LLMToolFormatter.recipesJSON(fetchRecipes(context: context))
+            return LLMContextSerializer.recipesSummaryJSON(fetchRecipes(context: context))
 
         case "get_recipe_details":
             guard let recipeName = input["name"] as? String else {
@@ -368,7 +368,7 @@ final class LLMService {
             return createRecipe(input: input, context: context)
 
         case "get_shopping_list":
-            return LLMToolFormatter.shoppingItemsJSON(fetchShoppingItems(context: context))
+            return LLMContextSerializer.shoppingItemsSummaryJSON(fetchShoppingItems(context: context))
 
         case "add_to_shopping_list":
             return addToShoppingList(input: input, context: context)
@@ -380,7 +380,7 @@ final class LLMService {
             return clearCheckedItems(context: context)
 
         case "get_expiring_items":
-            return LLMToolFormatter.expiringItemsJSON(fetchPantryItems(context: context))
+            return LLMContextSerializer.expiringItemsSummaryJSON(fetchPantryItems(context: context))
 
         case "suggest_recipes":
             let pantry = fetchPantryItems(context: context)
