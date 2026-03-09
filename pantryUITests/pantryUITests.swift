@@ -20,6 +20,7 @@
 //    TC-08  Checking off a shopping item shows the "checked" count
 //    TC-09  Tapping a pantry item navigates to its detail view
 //    TC-10  Swipe-to-delete removes a pantry item from the list
+//    TC-11  Pantry search no-match state and clear reset
 //
 
 import XCTest
@@ -349,5 +350,41 @@ final class PantryRegressionTests: XCTestCase {
         // The Pantry list should be empty again → empty state should return.
         XCTAssertTrue(app.staticTexts["No Items"].waitForExistence(timeout: 3),
                       "'No Items' empty state should reappear after deleting the only item")
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TC-11  Pantry search no-match + clear reset
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// With an empty pantry, entering any search query should switch the empty
+    /// state from "No Items" to "No Matches". Clearing the query should restore
+    /// "No Items" immediately.
+    @MainActor
+    func test_TC11_pantrySearch_noMatchStateAndClearRestoresDefaultEmptyState() throws {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = ["-UITesting", "-UITestPantrySearchQuery", "zzzz"]
+        app.launch()
+
+        let pantryTab = app.buttons.matching(NSPredicate(format: "label == 'Pantry'")).firstMatch
+        XCTAssertTrue(pantryTab.waitForExistence(timeout: 5), "Pantry tab button should be visible")
+        pantryTab.tap()
+        XCTAssertTrue(app.navigationBars["Pantry"].waitForExistence(timeout: 5),
+                      "Expected to be on Pantry screen before running search assertions")
+
+        XCTAssertTrue(app.staticTexts["No Matches"].waitForExistence(timeout: 3),
+                      "No-match search should show explicit 'No Matches' state")
+        XCTAssertFalse(app.staticTexts["No Items"].exists,
+                       "'No Items' should not be shown while a no-match query is active")
+
+        let clearButton = app.buttons["pantry.clearSearchButton"]
+        XCTAssertTrue(clearButton.waitForExistence(timeout: 3),
+                      "Clear button should be visible when the search query is non-empty")
+        clearButton.tap()
+
+        XCTAssertFalse(app.staticTexts["No Matches"].waitForExistence(timeout: 3),
+                       "'No Matches' should disappear after clearing search")
+        XCTAssertFalse(clearButton.exists,
+                       "Clear button should disappear once the query is reset")
     }
 }
