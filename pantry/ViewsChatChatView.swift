@@ -17,24 +17,19 @@ struct ChatView: View {
     @Query(sort: \Recipe.name) private var recipes: [Recipe]
     @Query(sort: \ShoppingListItem.addedDate) private var shoppingItems: [ShoppingListItem]
 
-    @State private var service = LLMService()
-    @State private var inputText = ""
+    @Bindable var session: AssistantSessionStore
     @State private var showAPIKeySheet = false
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            if service.hasAPIKey {
-                chatInterface
-            } else {
-                APIKeySetupView(service: service)
-            }
+            chatInterface
         }
         .navigationTitle("Pantry Assistant")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarItems }
         .sheet(isPresented: $showAPIKeySheet) {
-            APIKeySetupView(service: service)
+            APIKeySetupView(service: session.service)
                 .presentationDetents([.medium])
         }
     }
@@ -45,12 +40,17 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    if service.chatMessages.isEmpty {
+                    if !session.service.hasAPIKey {
+                        MissingAPIKeyBanner {
+                            showAPIKeySheet = true
+                        }
+                    }
+                    if session.service.chatMessages.isEmpty {
                         WelcomeMessageView(onSelect: sendSuggestion)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 48)
                     }
-                    ForEach(service.chatMessages) { message in
+                    ForEach(session.service.chatMessages) { message in
                         ChatBubbleView(message: message)
                             .id(message.id)
                     }
@@ -65,22 +65,23 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     Divider()
                     ChatInputBar(
-                        text: $inputText,
-                        isLoading: service.isLoading,
+                        text: $session.draftMessage,
+                        isLoading: session.service.isLoading,
                         isFocused: _isInputFocused,
                         onSend: sendMessage
                     )
                     .padding(.horizontal)
-                    .padding(.vertical, 8)
+                    .padding(.top, 8)
+                    .padding(.bottom, 70)
                     .background(.bar)
                 }
             }
-            .onChange(of: service.chatMessages.count) {
+            .onChange(of: session.service.chatMessages.count) {
                 withAnimation(.easeOut(duration: 0.25)) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
-            .onChange(of: service.chatMessages.last?.content) {
+            .onChange(of: session.service.chatMessages.last?.content) {
                 withAnimation(.easeOut(duration: 0.15)) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
@@ -93,28 +94,22 @@ struct ChatView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
-            if service.hasAPIKey {
-                Menu {
-                    NavigationLink {
-                        MealPlanListView()
-                    } label: {
-                        Label("Open Meal Plans", systemImage: "calendar.badge.clock")
-                    }
-                    Divider()
-                    Button {
-                        showAPIKeySheet = true
-                    } label: {
-                        Label("API Key Settings", systemImage: "key")
-                    }
+            Menu {
+                Button {
+                    showAPIKeySheet = true
+                } label: {
+                    Label("API Key Settings", systemImage: "key")
+                }
+                if session.service.hasAPIKey {
                     Divider()
                     Button(role: .destructive) {
-                        service.clearConversation()
+                        session.clearConversation()
                     } label: {
                         Label("Clear Chat", systemImage: "trash")
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
         }
     }
@@ -122,18 +117,41 @@ struct ChatView: View {
     // MARK: - Send Message
 
     private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = session.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        inputText = ""
+        guard session.service.hasAPIKey else {
+            showAPIKeySheet = true
+            return
+        }
         isInputFocused = false
         Task {
-            await service.sendMessage(text, context: modelContext)
+            await session.sendDraft(context: modelContext)
         }
     }
 
     private func sendSuggestion(_ text: String) {
-        inputText = text
+        session.draftMessage = text
         sendMessage()
+    }
+}
+
+private struct MissingAPIKeyBanner: View {
+    let onSetupTap: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Assistant setup required")
+                .font(.headline)
+            Text("Add your Anthropic API key to start chatting.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button("Set Up API Key", action: onSetupTap)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -396,7 +414,7 @@ struct APIKeySetupView: View {
 // MARK: - Preview
 
 #Preview("Chat - Empty") {
-    ChatView()
+    ChatView(session: AssistantSessionStore())
         .modelContainer(for: [
             PantryItem.self, Category.self, StorageLocation.self,
             ShoppingListItem.self, Recipe.self, RecipeIngredient.self,

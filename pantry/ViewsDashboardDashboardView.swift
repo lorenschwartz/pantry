@@ -10,6 +10,7 @@ import SwiftData
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
+    @Bindable var assistantSession: AssistantSessionStore
 
     @Query private var pantryItems: [PantryItem]
     @Query(sort: \ShoppingListItem.priority, order: .reverse) private var shoppingItems: [ShoppingListItem]
@@ -165,7 +166,11 @@ struct DashboardView: View {
                         }
                     }
 
-                    DashboardAISection(pantryItems: activePantryItems, recipes: recipes)
+                    DashboardAISection(
+                        pantryItems: activePantryItems,
+                        recipes: recipes,
+                        assistantSession: assistantSession
+                    )
                         .padding(.horizontal)
 
                     if let plan = activeMealPlan {
@@ -192,7 +197,7 @@ struct DashboardView: View {
                         .padding(.horizontal)
                     }
 
-                    DashboardQuickActions()
+                    DashboardQuickActions(assistantSession: assistantSession)
                         .padding(.horizontal)
 
                     if let actionStatusMessage {
@@ -223,7 +228,7 @@ struct DashboardView: View {
                 .padding(.trailing, 16)
             }
             .sheet(isPresented: $showMoreMenu) {
-                MoreMenuView()
+                MoreMenuView(assistantSession: assistantSession)
             }
             .confirmationDialog(
                 pendingConfirmation?.title ?? "Approve Copilot Action",
@@ -540,11 +545,7 @@ struct DashboardAISection: View {
 
     let pantryItems: [PantryItem]
     let recipes: [Recipe]
-
-    @State private var service = LLMService()
-    @State private var query = ""
-    @State private var response: String? = nil
-    @State private var isLoading = false
+    @Bindable var assistantSession: AssistantSessionStore
 
     private let promptChips = [
         "What can I make tonight?",
@@ -565,7 +566,7 @@ struct DashboardAISection: View {
                 Text("Copilot Console")
                     .font(.headline)
                 Spacer()
-                NavigationLink(destination: ChatView()) {
+                NavigationLink(destination: ChatView(session: assistantSession)) {
                     Label("Open Assistant", systemImage: "arrow.right.circle")
                         .font(.caption)
                         .foregroundStyle(.indigo)
@@ -574,7 +575,7 @@ struct DashboardAISection: View {
 
             LazyVGrid(columns: chipColumns, alignment: .leading, spacing: 8) {
                 ForEach(promptChips, id: \.self) { chip in
-                    Button { query = chip } label: {
+                    Button { assistantSession.draftMessage = chip } label: {
                         Text(chip)
                             .font(.caption)
                             .lineLimit(1)
@@ -589,7 +590,7 @@ struct DashboardAISection: View {
             }
 
             HStack(spacing: 10) {
-                TextField("Ask anything about your pantry…", text: $query, axis: .vertical)
+                TextField("Ask anything about your pantry…", text: $assistantSession.draftMessage, axis: .vertical)
                     .lineLimit(1...3)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -600,28 +601,37 @@ struct DashboardAISection: View {
                     sendQuery()
                 } label: {
                     Group {
-                        if isLoading {
+                        if assistantSession.service.isLoading {
                             ProgressView().tint(.white)
                         } else {
                             Image(systemName: "arrow.up").fontWeight(.bold)
                         }
                     }
                     .frame(width: 36, height: 36)
-                    .background(query.isEmpty ? Color.secondary : Color.indigo)
+                    .background(
+                        assistantSession.draftMessage
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty ? Color.secondary : Color.indigo
+                    )
                     .foregroundStyle(.white)
                     .clipShape(Circle())
                 }
-                .disabled(query.isEmpty || isLoading)
+                .disabled(
+                    assistantSession.draftMessage
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .isEmpty || assistantSession.service.isLoading
+                )
             }
 
-            if let response {
+            if !assistantSession.service.chatMessages.isEmpty {
                 ScrollView(.vertical, showsIndicators: true) {
-                    Text(response)
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(assistantSession.service.chatMessages.suffix(6)) { message in
+                            ChatBubbleView(message: message)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 220)
                 .background(Color.indigo.opacity(0.08))
@@ -641,29 +651,15 @@ struct DashboardAISection: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
         )
-        .animation(.easeOut(duration: 0.2), value: response)
+        .animation(.easeOut(duration: 0.2), value: assistantSession.service.chatMessages.count)
     }
 
     private func sendQuery() {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = assistantSession.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        isLoading = true
-        response = nil
-
         Task {
-            service.clearConversation()
-            let dashboardPrompt = """
-            \(trimmed)
-
-            Keep your answer concise (max 120 words) and practical.
-            """
-
-            await service.sendMessage(dashboardPrompt, context: modelContext)
-            response = service.chatMessages.last(where: { $0.role == .assistant })?.content
-                ?? "No response from assistant."
-            query = ""
-            isLoading = false
+            await assistantSession.sendDraft(context: modelContext)
         }
     }
 }
@@ -731,13 +727,15 @@ private struct TopRecipeMatchCard: View {
 }
 
 private struct DashboardQuickActions: View {
+    @Bindable var assistantSession: AssistantSessionStore
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Quick Actions")
                 .font(.headline)
 
             HStack(spacing: 10) {
-                NavigationLink(destination: ChatView()) {
+                NavigationLink(destination: ChatView(session: assistantSession)) {
                     QuickActionTile(icon: "sparkles", label: "Open\nAssistant", color: .indigo)
                 }
                 NavigationLink(destination: MealPlanListView()) {
@@ -787,6 +785,6 @@ private struct QuickActionTile: View {
 
     SampleDataService.loadSampleData(into: container.mainContext)
 
-    return DashboardView()
+    return DashboardView(assistantSession: AssistantSessionStore())
         .modelContainer(container)
 }

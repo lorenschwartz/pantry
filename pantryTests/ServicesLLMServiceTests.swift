@@ -167,3 +167,36 @@ struct LLMToolFormatterTests {
         #expect(json == "[]" || !json.contains("Rice"))
     }
 }
+
+// MARK: - LLM Service Configuration Tests
+
+@MainActor
+struct LLMServiceConfigurationTests {
+
+    @Test func init_defaultsToBalancedProfile() {
+        let service = LLMService()
+        #expect(service.modelProfile == .balanced)
+        #expect(service.modelID == "claude-sonnet-4-5")
+    }
+
+    @Test func normalizeAssistantResponse_stripsCommonMarkdownArtifacts() {
+        let input = """
+        ## Dinner ideas
+        - Use almonds
+        - Make pesto
+        ```swift
+        print("x")
+        ```
+        """
+        let normalized = LLMService.normalizeAssistantResponse(input)
+        #expect(!normalized.contains("##"))
+        #expect(!normalized.contains("```"))
+        #expect(normalized.contains("Dinner ideas"))
+    }
+
+    @Test func systemPrompt_enforcesPlainTextResponses() {
+        let service = LLMService()
+        #expect(service.systemPrompt.contains("Return plain text only"))
+        #expect(service.systemPrompt.contains("Do not use Markdown"))
+    }
+}
