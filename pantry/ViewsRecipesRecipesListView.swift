@@ -10,7 +10,7 @@ import SwiftData
 
 struct RecipesListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Recipe.modifiedDate, order: .reverse) private var recipes: [Recipe]
+    @Query private var recipes: [Recipe]
 
     @Binding var showAddRecipe: Bool
 
@@ -19,9 +19,10 @@ struct RecipesListView: View {
     @State private var selectedDifficulty: RecipeDifficulty?
     @State private var showFavoritesOnly = false
     @State private var showMakeableOnly = false
+    @State private var sortOption: RecipeSortOption = .modifiedDate
     
     var filteredRecipes: [Recipe] {
-        recipes.filter { recipe in
+        let filtered = recipes.filter { recipe in
             // Search filter
             if !searchText.isEmpty {
                 let nameMatch = recipe.name.localizedCaseInsensitiveContains(searchText)
@@ -51,6 +52,22 @@ struct RecipesListView: View {
             }
             
             return true
+        }
+
+        switch sortOption {
+        case .modifiedDate:
+            return filtered.sorted { $0.modifiedDate > $1.modifiedDate }
+        case .name:
+            return filtered.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .rating:
+            return filtered.sorted { lhs, rhs in
+                switch (lhs.rating, rhs.rating) {
+                case let (l?, r?): return l > r
+                case (nil, _?): return false  // unrated goes after rated
+                case (_?, nil): return true
+                case (nil, nil): return false  // preserve relative order for unrated
+                }
+            }
         }
     }
     
@@ -166,6 +183,18 @@ struct RecipesListView: View {
     
     private var filterMenu: some View {
         Group {
+            Menu("Sort By") {
+                Button(sortOption == .modifiedDate ? "✓ Recently Modified" : "Recently Modified") {
+                    sortOption = .modifiedDate
+                }
+                Button(sortOption == .name ? "✓ Name" : "Name") {
+                    sortOption = .name
+                }
+                Button(sortOption == .rating ? "✓ Rating (Highest First)" : "Rating (Highest First)") {
+                    sortOption = .rating
+                }
+            }
+
             Menu("Difficulty") {
                 Button(selectedDifficulty == nil ? "✓ All" : "All") {
                     selectedDifficulty = nil
@@ -189,6 +218,7 @@ struct RecipesListView: View {
                 selectedDifficulty = nil
                 showFavoritesOnly = false
                 showMakeableOnly = false
+                sortOption = .modifiedDate
             }
         }
     }
@@ -300,11 +330,9 @@ struct RecipeRow: View {
                     Label("\(recipe.servings)", systemImage: "person.2")
                     
                     if let rating = recipe.rating {
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                            Text(String(format: "%.1f", rating))
-                        }
-                        .foregroundStyle(.orange)
+                        StarRatingView(rating: rating, font: .caption2)
+                        Text(String(format: "%.1f", rating))
+                            .foregroundStyle(.orange)
                     }
                 }
                 .font(.caption)
@@ -351,6 +379,14 @@ struct FilterChip: View {
             .clipShape(Capsule())
         }
     }
+}
+
+// MARK: - Sort Option
+
+enum RecipeSortOption {
+    case modifiedDate
+    case name
+    case rating
 }
 
 // MARK: - Preview
